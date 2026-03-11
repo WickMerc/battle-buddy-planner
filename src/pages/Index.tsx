@@ -5,11 +5,13 @@ import {
 } from "@/lib/taclog-data";
 import { EQUIPMENT_DB } from "@/lib/equipment-db";
 import { computeRouteAnalysis, buildRouteCtx, type RouteAnalysis } from "@/lib/route-analysis";
+import type { BriefingData } from "@/lib/briefing-types";
 import ManifestEditor from "@/components/taclog/ManifestEditor";
 import LogisticsPanel from "@/components/taclog/LogisticsPanel";
 import ChatPanel from "@/components/taclog/ChatPanel";
 import MapboxMap from "@/components/taclog/MapboxMap";
 import RouteAnalysisCard from "@/components/taclog/RouteAnalysisCard";
+import BriefingOverlay from "@/components/taclog/BriefingOverlay";
 import { forward as toMgrs } from "mgrs";
 
 const INITIAL_NODES: MapNode[] = [
@@ -45,6 +47,11 @@ export default function Index() {
   const [routeMode, setRouteMode] = useState(false);
   const [routeStart, setRouteStart] = useState<string | null>(null);
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysis | null>(null);
+
+  // Briefing state
+  const [briefing, setBriefing] = useState<BriefingData | null>(null);
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   useEffect(() => { if (pendingName && nameInput.current) nameInput.current.focus(); }, [pendingName]);
 
@@ -128,6 +135,55 @@ export default function Index() {
       setAddLocationMode(false);
       setDrawMode(false);
       setEditNode(null);
+    }
+  };
+
+  const generateBriefing = async () => {
+    if (briefingLoading) return;
+    setBriefingLoading(true);
+    const ctx = buildCtx(nodes, eqDb, log, hours);
+    if (routeAnalysis) {
+      // include route context too
+    }
+
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/taclog-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ mode: "briefing", context: ctx }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      if (data.briefing) {
+        const briefingData: BriefingData = {
+          ...data.briefing,
+          generatedAt: new Date().toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        };
+        setBriefing(briefingData);
+        setBriefingOpen(true);
+      }
+    } catch (e) {
+      console.error("Briefing error:", e);
+      setChat(prev => [...prev, {
+        role: "system",
+        text: `Briefing generation failed: ${e instanceof Error ? e.message : "Unknown error"}`,
+      }]);
+    } finally {
+      setBriefingLoading(false);
     }
   };
 
@@ -273,6 +329,19 @@ export default function Index() {
               : "↗ Route Analysis"}
           </button>
           <div className="w-px h-[18px] bg-border mx-1" />
+          <button
+            onClick={() => briefing ? setBriefingOpen(true) : generateBriefing()}
+            disabled={briefingLoading}
+            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors font-semibold"
+            style={{
+              background: briefingLoading ? 'hsl(var(--muted))' : 'hsl(var(--primary))',
+              borderColor: 'hsl(var(--primary))',
+              color: briefingLoading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))',
+            }}
+          >
+            {briefingLoading ? "⏳ Generating..." : briefing ? "📋 View Briefing" : "📋 Generate Briefing"}
+          </button>
+          <div className="w-px h-[18px] bg-border mx-1" />
           <span className="text-muted-foreground text-[10px]">Mission:</span>
           <input
             type="range" min={1} max={72} value={hours}
@@ -391,6 +460,14 @@ export default function Index() {
           )}
         </div>
       </div>
+
+      {/* Briefing overlay */}
+      {briefingOpen && briefing && (
+        <BriefingOverlay
+          briefing={briefing}
+          onClose={() => setBriefingOpen(false)}
+        />
+      )}
     </div>
   );
 }
