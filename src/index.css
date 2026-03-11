@@ -39,9 +39,18 @@
   * {
     @apply border-border;
   }
-  body {
+  html, body, #root {
     @apply bg-background text-foreground;
-    font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+    font-family: 'DM Mono', 'Menlo', 'Consolas', monospace;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  html {
+    overflow-x: hidden;
+    position: fixed;
+    width: 100%;
   }
 }
 
