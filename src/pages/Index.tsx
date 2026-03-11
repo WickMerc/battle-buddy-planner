@@ -93,17 +93,80 @@ export default function Index() {
     const msg = chatIn.trim();
     if (!msg || chatLoad) return;
     setChatIn("");
-    setChat(prev => [...prev, { role: "user", text: msg }]);
+    const userMsg: ChatMessage = { role: "user", text: msg };
+    setChat(prev => [...prev, userMsg]);
     setChatLoad(true);
 
     const ctx = buildCtx(nodes, eqDb, log, hours);
-    setTimeout(() => {
+    // Filter to only user/assistant messages for the API
+    const apiMessages = [...chat.filter(m => m.role !== "system"), userMsg];
+
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/taclog-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ messages: apiMessages, context: ctx }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIdx: number;
+        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIdx);
+          buffer = buffer.slice(newlineIdx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ") || line.trim() === "") continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.delta?.text || parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              assistantText += delta;
+              const text = assistantText;
+              setChat(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant") {
+                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, text } : m);
+                }
+                return [...prev, { role: "assistant", text }];
+              });
+            }
+          } catch {
+            // partial JSON, ignore
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Chat error:", e);
       setChat(prev => [...prev, {
-        role: "assistant",
-        text: `Based on the current ${hours}hr operational window:\n\nTotal fuel requirement: ${log.fuel.toLocaleString()} gallons\nHEMTT sorties needed: ${log.hemtt}\nTotal personnel: ${log.crew}\n\nNote: AI chat requires backend integration to enable full AI analysis.`,
+        role: "system",
+        text: `Error: ${e instanceof Error ? e.message : "Failed to reach AI"}. Check your API key configuration.`,
       }]);
+    } finally {
       setChatLoad(false);
-    }, 800);
+    }
   };
 
   const editData = nodes.find(n => n.id === editNode);
