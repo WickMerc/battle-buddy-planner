@@ -11,7 +11,7 @@ export default function QuickStartCard({ onAddLocation, onDrawShape, onLoadExamp
       <div className="bg-card/95 backdrop-blur-sm rounded-lg p-6 max-w-[340px] text-center panel-shadow pointer-events-auto relative">
         {/* Close button */}
         <button
-          onClick={onDismiss}
+          onClick={(e) => { e.stopPropagation(); onDismiss?.(); }}
           className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 active:bg-muted text-muted-foreground hover:text-foreground cursor-pointer border-0 transition-colors text-[14px]"
           aria-label="Close"
         >
