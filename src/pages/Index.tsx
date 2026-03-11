@@ -291,7 +291,7 @@ export default function Index() {
   const editData = nodes.find(n => n.id === editNode);
   const routeLine: [number, number, number, number] | null =
     routeAnalysis ? [routeAnalysis.from.lng, routeAnalysis.from.lat, routeAnalysis.to.lng, routeAnalysis.to.lat] : null;
-  const showQuickStart = nodes.length === 0 && !addLocationMode && !drawMode;
+  const showQuickStart = nodes.length === 0 && !addLocationMode && !drawMode && !quickStartDismissed;
 
   const closeManifest = () => setEditNode(null);
 
