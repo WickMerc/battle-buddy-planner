@@ -109,14 +109,12 @@ export default function MapboxMap({
     const map = mapRef.current;
     if (!map) return;
     const canvas = map.getCanvasContainer();
-    if (addLocationMode) {
-      canvas.style.cursor = "crosshair";
-    } else if (drawMode) {
+    if (addLocationMode || drawMode || routeMode) {
       canvas.style.cursor = "crosshair";
     } else {
       canvas.style.cursor = "";
     }
-  }, [addLocationMode, drawMode]);
+  }, [addLocationMode, drawMode, routeMode]);
 
   // Style switching
   const switchStyle = useCallback((idx: number) => {
