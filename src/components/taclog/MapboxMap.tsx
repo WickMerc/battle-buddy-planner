@@ -112,6 +112,11 @@ export default function MapboxMap({
       }
     });
 
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      onViewChange?.([c.lng, c.lat], map.getZoom());
+    });
+
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   }, []);
