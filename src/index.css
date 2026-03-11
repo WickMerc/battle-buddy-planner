@@ -1,48 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 216 33% 4%;
-    --foreground: 140 15% 65%;
-    --card: 216 30% 5%;
-    --card-foreground: 140 15% 65%;
-    --popover: 216 33% 4%;
-    --popover-foreground: 140 15% 65%;
-    --primary: 155 45% 65%;
-    --primary-foreground: 216 33% 4%;
-    --secondary: 210 25% 10%;
-    --secondary-foreground: 200 15% 35%;
-    --muted: 210 20% 8%;
-    --muted-foreground: 200 15% 25%;
-    --accent: 155 45% 65%;
-    --accent-foreground: 216 33% 4%;
+    --background: 36 20% 90%;
+    --foreground: 36 10% 16%;
+    --card: 36 25% 94%;
+    --card-foreground: 36 10% 16%;
+    --popover: 36 25% 94%;
+    --popover-foreground: 36 10% 16%;
+    --primary: 152 55% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 36 15% 86%;
+    --secondary-foreground: 36 8% 35%;
+    --muted: 36 12% 82%;
+    --muted-foreground: 36 8% 52%;
+    --accent: 152 55% 30%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 55% 45%;
-    --destructive-foreground: 0 30% 85%;
-    --border: 210 20% 12%;
-    --input: 210 20% 12%;
-    --ring: 155 45% 65%;
-    --radius: 0.25rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 15% 75%;
+    --input: 36 15% 75%;
+    --ring: 152 55% 30%;
+    --radius: 0.375rem;
 
-    --tac-bg: 216 33% 3%;
-    --tac-panel: 216 30% 4%;
-    --tac-green: 155 45% 65%;
-    --tac-amber: 38 65% 55%;
-    --tac-purple: 260 35% 60%;
-    --tac-blue: 200 45% 55%;
-    --tac-red: 0 55% 55%;
-    --tac-dim: 200 15% 18%;
-    --tac-grid: 210 20% 8%;
+    --tac-bg: 36 15% 82%;
+    --tac-panel: 36 25% 94%;
+    --tac-green: 152 55% 30%;
+    --tac-amber: 30 70% 44%;
+    --tac-purple: 260 35% 45%;
+    --tac-blue: 210 55% 38%;
+    --tac-red: 0 55% 45%;
+    --tac-dim: 36 8% 52%;
+    --tac-grid: 36 12% 78%;
+    --tac-shape: 215 50% 40%;
+    --tac-shape-fill: 215 50% 40%;
+    --tac-info: 210 55% 38%;
 
-    --sidebar-background: 216 30% 4%;
-    --sidebar-foreground: 140 15% 65%;
-    --sidebar-primary: 155 45% 65%;
-    --sidebar-primary-foreground: 216 33% 4%;
-    --sidebar-accent: 210 20% 8%;
-    --sidebar-accent-foreground: 140 15% 65%;
-    --sidebar-border: 210 20% 12%;
-    --sidebar-ring: 155 45% 65%;
+    --sidebar-background: 36 25% 94%;
+    --sidebar-foreground: 36 10% 16%;
+    --sidebar-primary: 152 55% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 36 15% 86%;
+    --sidebar-accent-foreground: 36 10% 16%;
+    --sidebar-border: 36 15% 75%;
+    --sidebar-ring: 152 55% 30%;
   }
 }
 
@@ -52,6 +57,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    font-family: 'Source Code Pro', 'Menlo', 'Consolas', monospace;
   }
 }
