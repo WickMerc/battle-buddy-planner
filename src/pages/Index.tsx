@@ -135,7 +135,7 @@ id: gid(), lng, lat,
 name: `Position ${Date.now() % 1000}`,
 shape, shapeData, equipment: [],
 };
-setNodes(prev => […prev, newNode]);
+setNodes(prev => [...prev, newNode]);
 setSelNode(newNode.id);
 setEditNode(newNode.id);
 setPendingName({ id: newNode.id });
