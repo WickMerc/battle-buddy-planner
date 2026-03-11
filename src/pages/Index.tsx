@@ -48,6 +48,11 @@ export default function Index() {
   const [routeStart, setRouteStart] = useState<string | null>(null);
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysis | null>(null);
 
+  // Briefing state
+  const [briefing, setBriefing] = useState<BriefingData | null>(null);
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+
   useEffect(() => { if (pendingName && nameInput.current) nameInput.current.focus(); }, [pendingName]);
 
   const log = computeLog(nodes, eqDb, hours);
