@@ -230,7 +230,7 @@ const msg = (directMsg || chatIn).trim();
 if (!msg || chatLoad) return;
 setChatIn(””);
 const userMsg: ChatMessage = { role: “user”, text: msg };
-setChat(prev => […prev, userMsg]);
+setChat(prev => [...prev, userMsg]);
 setChatLoad(true);
 let ctx = buildCtx(nodes, eqDb, log, hours);
 if (routeAnalysis) ctx += buildRouteCtx(routeAnalysis);
