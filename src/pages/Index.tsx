@@ -3,6 +3,7 @@ import {
   DEFAULT_EQUIPMENT, computeLog, buildCtx, gid, haversineMi,
   type MapNode, type ChatMessage, type LogisticsResult, type EquipmentDB,
 } from "@/lib/taclog-data";
+import { EQUIPMENT_DB } from "@/lib/equipment-db";
 import ManifestEditor from "@/components/taclog/ManifestEditor";
 import LogisticsPanel from "@/components/taclog/LogisticsPanel";
 import ChatPanel from "@/components/taclog/ChatPanel";
