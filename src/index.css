@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,48 +6,51 @@
 
 @layer base {
   :root {
-    --background: 36 20% 90%;
-    --foreground: 36 10% 16%;
-    --card: 36 25% 94%;
-    --card-foreground: 36 10% 16%;
-    --popover: 36 25% 94%;
-    --popover-foreground: 36 10% 16%;
-    --primary: 152 55% 30%;
+    --background: 40 18% 90%;
+    --foreground: 90 10% 14%;
+    --card: 40 22% 95%;
+    --card-foreground: 90 10% 14%;
+    --popover: 40 22% 95%;
+    --popover-foreground: 90 10% 14%;
+    --primary: 100 38% 21%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 36 15% 86%;
-    --secondary-foreground: 36 8% 35%;
-    --muted: 36 12% 82%;
-    --muted-foreground: 36 8% 52%;
-    --accent: 152 55% 30%;
+    --secondary: 40 14% 87%;
+    --secondary-foreground: 90 8% 30%;
+    --muted: 40 10% 82%;
+    --muted-foreground: 40 6% 48%;
+    --accent: 100 38% 21%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 55% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 36 15% 75%;
-    --input: 36 15% 75%;
-    --ring: 152 55% 30%;
+    --border: 40 12% 78%;
+    --input: 40 12% 78%;
+    --ring: 100 38% 21%;
     --radius: 0.375rem;
 
-    --tac-bg: 36 15% 82%;
-    --tac-panel: 36 25% 94%;
-    --tac-green: 152 55% 30%;
-    --tac-amber: 30 70% 44%;
-    --tac-purple: 260 35% 45%;
-    --tac-blue: 210 55% 38%;
+    --tac-bg: 40 14% 82%;
+    --tac-panel: 40 22% 95%;
+    --tac-green: 100 38% 21%;
+    --tac-amber: 32 70% 42%;
+    --tac-purple: 260 30% 42%;
+    --tac-blue: 210 45% 35%;
     --tac-red: 0 55% 45%;
-    --tac-dim: 36 8% 52%;
-    --tac-grid: 36 12% 78%;
-    --tac-shape: 215 50% 40%;
-    --tac-shape-fill: 215 50% 40%;
-    --tac-info: 210 55% 38%;
+    --tac-dim: 40 6% 48%;
+    --tac-grid: 40 10% 78%;
+    --tac-shape: 215 45% 38%;
+    --tac-shape-fill: 215 45% 38%;
+    --tac-info: 210 45% 35%;
 
-    --sidebar-background: 36 25% 94%;
-    --sidebar-foreground: 36 10% 16%;
-    --sidebar-primary: 152 55% 30%;
+    --sidebar-background: 40 22% 95%;
+    --sidebar-foreground: 90 10% 14%;
+    --sidebar-primary: 100 38% 21%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 36 15% 86%;
-    --sidebar-accent-foreground: 36 10% 16%;
-    --sidebar-border: 36 15% 75%;
-    --sidebar-ring: 152 55% 30%;
+    --sidebar-accent: 40 14% 87%;
+    --sidebar-accent-foreground: 90 10% 14%;
+    --sidebar-border: 40 12% 78%;
+    --sidebar-ring: 100 38% 21%;
+
+    --shadow-panel: 0 2px 12px -2px hsl(90 10% 14% / 0.08), 0 1px 4px -1px hsl(90 10% 14% / 0.06);
+    --shadow-card: 0 1px 6px -1px hsl(90 10% 14% / 0.06), 0 1px 2px hsl(90 10% 14% / 0.04);
   }
 }
 
@@ -57,6 +60,15 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Source Code Pro', 'Menlo', 'Consolas', monospace;
+    font-family: 'DM Mono', 'Menlo', 'Consolas', monospace;
+  }
+}
+
+@layer utilities {
+  .panel-shadow {
+    box-shadow: var(--shadow-panel);
+  }
+  .card-shadow {
+    box-shadow: var(--shadow-card);
   }
 }
