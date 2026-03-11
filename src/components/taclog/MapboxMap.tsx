@@ -25,6 +25,9 @@ interface MapboxMapProps {
   onAddNode: (lng: number, lat: number, shape: "point" | "circle" | "rect", shapeData?: MapNode["shapeData"]) => void;
   onDeselectNode: () => void;
   addLocationMode: boolean;
+  routeMode?: boolean;
+  routeStart?: string | null;
+  routeLine?: [number, number, number, number] | null;
 }
 
 export default function MapboxMap({
