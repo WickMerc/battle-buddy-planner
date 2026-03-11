@@ -72,6 +72,7 @@ export default function Index() {
   const [chatLoad, setChatLoad] = useState(false);
   const [rightTab, setRightTab] = useState<"logistics" | "chat">("logistics");
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [quickStartDismissed, setQuickStartDismissed] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [addLocationMode, setAddLocationMode] = useState(false);
   const [pendingName, setPendingName] = useState<{ id: string } | null>(null);
