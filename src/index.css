@@ -39,9 +39,18 @@
   * {
     @apply border-border;
   }
-  body {
+  html, body, #root {
     @apply bg-background text-foreground;
-    font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+    font-family: 'DM Mono', 'Menlo', 'Consolas', monospace;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  html {
+    overflow-x: hidden;
+    position: fixed;
+    width: 100%;
   }
 }
 
@@ -51,5 +60,26 @@
   }
   .card-shadow {
     box-shadow: 0 1px 4px -1px hsl(0 0% 0% / 0.3);
+  }
+  .animate-slide-in-right {
+    animation: slideInRight 0.2s ease-out;
+  }
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0.8; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+  @keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
   }
 }
