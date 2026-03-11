@@ -16,7 +16,14 @@ const INITIAL_NODES: MapNode[] = [
 ];
 
 export default function Index() {
-  const [eqDb, setEqDb] = useState<EquipmentDB>(DEFAULT_EQUIPMENT);
+  const [eqDb, setEqDb] = useState<EquipmentDB>(() => {
+    // Seed legacy eqDb with all entries from the new comprehensive database
+    const db: EquipmentDB = { ...DEFAULT_EQUIPMENT };
+    EQUIPMENT_DB.forEach(eq => {
+      db[eq.id] = { name: eq.name, cat: eq.cat, fuelBurn: eq.fuelBurnMoving, fuelCap: eq.fuelCap, speed: eq.speed, crew: eq.crew };
+    });
+    return db;
+  });
   const [nodes, setNodes] = useState<MapNode[]>(INITIAL_NODES);
   const [selNode, setSelNode] = useState<string | null>(null);
   const [editNode, setEditNode] = useState<string | null>(null);
