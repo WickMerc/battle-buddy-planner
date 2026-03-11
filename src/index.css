@@ -1,353 +1,55 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-const EQUIPMENT_TYPES = {
-uh60: { name: "UH-60 Black Hawk", category: "rotary", fuelBurn: 130, fuelCap: 360, speed: 1
-ch47: { name: "CH-47 Chinook", category: "rotary", fuelBurn: 200, fuelCap: 1030, speed: 170
-ah64: { name: "AH-64 Apache", category: "rotary", fuelBurn: 165, fuelCap: 375, speed: 182,
-m1: { name: "M1 Abrams", category: "armor", fuelBurn: 60, fuelCap: 500, speed: 42, crew: 4
-m2: { name: "M2 Bradley", category: "ifv", fuelBurn: 30, fuelCap: 175, speed: 40, crew: 3 }
-stryker: { name: "Stryker", category: "ifv", fuelBurn: 12, fuelCap: 53, speed: 62, crew: 2
-hmmwv: { name: "HMMWV", category: "wheeled", fuelBurn: 4, fuelCap: 25, speed: 55, crew: 4,
-fmtv: { name: "FMTV Cargo", category: "logistics", fuelBurn: 8, fuelCap: 55, speed: 55, cre
-hemtt: { name: "HEMTT Tanker", category: "logistics", fuelBurn: 12, fuelCap: 80, speed: 56,
-paladin: { name: "M109 Paladin", category: "artillery", fuelBurn: 40, fuelCap: 133, speed:
-};
-const CAT_LABELS = { rotary: "Rotary Wing", armor: "Armor", ifv: "IFV", wheeled: "Wheeled", l
-function gid() { return Math.random().toString(36).substr(2, 9); }
-function dist(a, b) { return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2); }
-function px2mi(px) { return px * 0.15; }
-function computeLogistics(nodes, hours) {
-const res = [];
-let gFuel = 0, gCrew = 0;
-nodes.forEach(node => {
-const nr = { nodeId: node.id, nodeName: node.name, items: [], totalFuel: 0, totalCrew: 0
-node.equipment.forEach(eq => {
-const t = EQUIPMENT_TYPES[eq.typeId];
-if (!t || eq.count <= 0) return;
-const pct = eq.startFuelPct ?? 100;
-const curGal = (pct / 100) * t.fuelCap;
-const opsFuel = t.fuelBurn * hours * eq.count;
-const topOff = Math.max(0, t.fuelCap * eq.count - curGal * eq.count);
-const total = opsFuel + topOff;
-const crew = t.crew * eq.count;
-nr.items.push({ typeId: eq.typeId, name: t.name, count: eq.count, pct, opsFuel: Math.ro
-nr.totalFuel += total;
-nr.totalCrew += crew;
-});
-nr.totalFuel = Math.round(nr.totalFuel);
-nr.hemtt = Math.ceil(nr.totalFuel / 2500);
-gFuel += nr.totalFuel;
-gCrew += nr.totalCrew;
-res.push(nr);
-});
-return { nodes: res, totalFuel: Math.round(gFuel), totalCrew: gCrew, totalHemtt: Math.ceil(
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 6%;
+    --foreground: 180 10% 85%;
+    --card: 220 18% 8%;
+    --card-foreground: 180 10% 85%;
+    --popover: 220 18% 8%;
+    --popover-foreground: 180 10% 85%;
+    --primary: 155 50% 45%;
+    --primary-foreground: 220 20% 6%;
+    --secondary: 210 15% 12%;
+    --secondary-foreground: 180 10% 70%;
+    --muted: 210 12% 15%;
+    --muted-foreground: 200 10% 40%;
+    --accent: 210 15% 14%;
+    --accent-foreground: 180 10% 85%;
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 15% 14%;
+    --input: 210 15% 14%;
+    --ring: 155 50% 45%;
+    --radius: 0.4rem;
+    --sidebar-background: 220 18% 7%;
+    --sidebar-foreground: 180 10% 85%;
+    --sidebar-primary: 155 50% 45%;
+    --sidebar-primary-foreground: 220 20% 6%;
+    --sidebar-accent: 210 15% 12%;
+    --sidebar-accent-foreground: 180 10% 85%;
+    --sidebar-border: 210 15% 14%;
+    --sidebar-ring: 155 50% 45%;
+  }
 }
-function buildCtx(nodes, log, hours) {
-let s = `BATTLEFIELD (${hours}hr window):\n\n`;
-nodes.forEach(n => {
-s += `LOC: ${n.name}\n`;
-if (!n.equipment.length) { s += " Empty\n"; return; }
-n.equipment.forEach(e => {
-const t = EQUIPMENT_TYPES[e.typeId];
-if (t) s += ` ${e.count}x ${t.name} @ ${e.startFuelPct??100}% fuel (${t.fuelBurn}gal/h
-});
-});
-s += `\nTOTALS: ${log.totalFuel.toLocaleString()}gal fuel, ${log.totalHemtt} HEMTT loads, $
-if (nodes.length > 1) {
-s += "\nDISTANCES:\n";
-for (let i = 0; i < nodes.length; i++)
-for (let j = i+1; j < nodes.length; j++)
-s += `${nodes[i].name} - ${nodes[j].name}: ${px2mi(dist(nodes[i], nodes[j])).toFixed(
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  }
 }
-return s;
-}
-function ManifestEditor({ node, onUpdate, onClose }) {
-const cats = {};
-Object.entries(EQUIPMENT_TYPES).forEach(([id, eq]) => {
-if (!cats[eq.category]) cats[eq.category] = [];
-cats[eq.category].push({ id, ...eq });
-});
-const getEq = tid => node.equipment.find(e => e.typeId === tid);
-const setCount = (tid, v) => {
-const c = Math.max(0, parseInt(v) || 0);
-const ex = node.equipment.find(e => e.typeId === tid);
-const newEq = ex
-? node.equipment.map(e => e.typeId === tid ? { ...e, count: c } : e)
-: [...node.equipment, { typeId: tid, count: c, startFuelPct: 100 }];
-onUpdate({ ...node, equipment: newEq.filter(e => e.count > 0) });
-};
-const setFuel = (tid, v) => {
-const p = Math.min(100, Math.max(0, parseInt(v) || 0));
-onUpdate({ ...node, equipment: node.equipment.map(e => e.typeId === tid ? { ...e, startFu
-};
-return (
-<div style={{ background: "#0c1018", border: "1px solid #1e2d3d", padding: 14, width: 340
-<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", m
-<div>
-<input value={node.name} onChange={e => onUpdate({ ...node, name: e.target.value })
-style={{ background: "transparent", border: "none", borderBottom: "1px solid #2a3
-<div style={{ color: "#2a3a4a", fontSize: 9, marginTop: 2 }}>Set vehicle counts and
-</div>
-<button onClick={onClose} style={{ background: "none", border: "1px solid #1e2d3d", c
-</div>
-{Object.entries(cats).map(([cat, items]) => (
-<div key={cat} style={{ marginBottom: 8 }}>
-<div style={{ color: "#2a4050", fontSize: 8, textTransform: "uppercase", letterSpac
-{items.map(item => {
-const eq = getEq(item.id);
-const count = eq?.count || 0;
-const fuel = eq?.startFuelPct ?? 100;
-return (
-<div key={item.id} style={{ display: "flex", alignItems: "center", padding: "3p
-<span style={{ color: "#4a6878", width: 125, fontSize: 10 }}>{item.name}</spa
-<input type="number" min={0} max={999} value={count} onChange={e => setCount(
-style={{ width: 42, background: "#080c10", border: "1px solid #1e2d3d", col
-{count > 0 && (
-<div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-<span style={{ color: "#2a4050", fontSize: 8 }}>FUEL</span>
-<input type="number" min={0} max={100} value={fuel} onChange={e => setFue
-style={{ width: 36, background: "#080c10", border: `1px solid ${fuel <
-<span style={{ color: "#2a4050", fontSize: 8 }}>%</span>
-</div>
-)}
-</div>
-);
-})}
-</div>
-))}
-</div>
-);
-}
-export default function TacLog() {
-const [nodes, setNodes] = useState([
-{ id: "n1", x: 160, y: 300, name: "FOB Alpha", equipment: [] },
-{ id: "n2", x: 480, y: 130, name: "LZ Bravo", equipment: [] },
-{ id: "n3", x: 620, y: 350, name: "AA Charlie", equipment: [] },
-]);
-const [selNode, setSelNode] = useState(null);
-const [editNode, setEditNode] = useState(null);
-const [hours, setHours] = useState(24);
-const [chat, setChat] = useState([{ role: "system", text: "TACLOG AI online. I see your ful
-const [chatIn, setChatIn] = useState("");
-const [chatLoad, setChatLoad] = useState(false);
-const [rightTab, setRightTab] = useState("logistics");
-const [placing, setPlacing] = useState(false);
-const [dragId, setDragId] = useState(null);
-const [draws, setDraws] = useState([]);
-const [drawing, setDrawing] = useState(false);
-const [drawMode, setDrawMode] = useState(false);
-const [stroke, setStroke] = useState(null);
-const mapRef = useRef(null);
-const chatEnd = useRef(null);
-useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
-const log = computeLogistics(nodes, hours);
-const xy = e => {
-if (!mapRef.current) return null;
-const r = mapRef.current.getBoundingClientRect();
-return { x: e.clientX - r.left, y: e.clientY - r.top };
-};
-const onMapClick = e => {
-if (drawMode || dragId) return;
-if (placing) {
-const p = xy(e);
-if (!p) return;
-const nn = { id: gid(), x: p.x, y: p.y, name: `Position ${nodes.length+1}`, equipment:
-setNodes(prev => [...prev, nn]);
-setPlacing(false);
-setEditNode(nn.id);
-return;
-}
-setSelNode(null);
-setEditNode(null);
-};
-const onDown = e => { if (!drawMode) return; const p = xy(e); if (p) { setDrawing(true); se
-const onMove = e => {
-if (dragId) { const p = xy(e); if (p) setNodes(prev => prev.map(n => n.id === dragId ? {
-if (!drawing || !stroke) return; const p = xy(e); if (p) setStroke(prev => [...prev, p]);
-};
-const onUp = () => {
-if (dragId) { setDragId(null); return; }
-if (drawing && stroke && stroke.length > 2) setDraws(prev => [...prev, { id: gid(), point
-setDrawing(false); setStroke(null);
-};
-const onNodeClick = (e, id) => { e.stopPropagation(); if (drawMode) return; setSelNode(id);
-const onNodeDrag = (e, id) => { if (drawMode) return; e.stopPropagation(); setDragId(id); s
-const updateNode = u => setNodes(prev => prev.map(n => n.id === u.id ? u : n));
-const removeNode = id => { setNodes(prev => prev.filter(n => n.id !== id)); if (editNode ==
-const sendChat = async () => {
-const msg = chatIn.trim();
-if (!msg || chatLoad) return;
-setChatIn("");
-setChat(prev => [...prev, { role: "user", text: msg }]);
-setChatLoad(true);
-try {
-const ctx = buildCtx(nodes, log, hours);
-const sys = `You are TACLOG AI, a tactical logistics planning assistant embedded in a b
-const msgs = chat.filter(m => m.role !== "system").map(m => ({ role: m.role === "user"
-msgs.push({ role: "user", content: msg });
-const resp = await fetch("https://api.anthropic.com/v1/messages", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: s
-});
-const data = await resp.json();
-const text = data.content?.map(c => c.text || "").join("") || "No response.";
-setChat(prev => [...prev, { role: "assistant", text }]);
-} catch (err) {
-setChat(prev => [...prev, { role: "assistant", text: `Connection error: ${err.message}`
-}
-setChatLoad(false);
-};
-const editData = nodes.find(n => n.id === editNode);
-const grid = Array.from({ length: 60 }, (_, i) => i * 20);
-return (
-<div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column", b
-{/* TOP */}
-<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", p
-<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-<span style={{ color: "#7dd3a8", fontWeight: 800, fontSize: 14, letterSpacing: 3 }}
-<span style={{ color: "#1e2e38", fontSize: 9, letterSpacing: 1 }}>v0.2</span>
-</div>
-<div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-<button onClick={() => { setPlacing(true); setDrawMode(false); }}
-style={{ padding: "4px 10px", background: placing ? "#0e2018" : "transparent", bo
-⊕ Location
-</button>
-<button onClick={() => { setDrawMode(!drawMode); setPlacing(false); }}
-style={{ padding: "4px 10px", background: drawMode ? "#141428" : "transparent", b
-✎ Draw
-</button>
-{draws.length > 0 && <button onClick={() => setDraws([])} style={{ padding: "4px 8p
-<div style={{ width: 1, height: 14, background: "#141c24", margin: "0 6px" }} />
-<span style={{ color: "#1e2e38", fontSize: 9 }}>MISSION</span>
-<input type="range" min={1} max={72} value={hours} onChange={e => setHours(+e.targe
-<span style={{ color: "#7dd3a8", fontWeight: 700, fontSize: 12, minWidth: 28 }}>{ho
-</div>
-</div>
-<div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-{/* MAP */}
-<div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-<svg ref={mapRef} width="100%" height="100%"
-style={{ background: "#0b0f16", cursor: placing ? "cell" : drawMode ? "crosshair"
-onClick={onMapClick} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-{grid.map(p => <g key={p}><line x1={p} y1={0} x2={p} y2={2000} stroke="#0d1218" s
-<ellipse cx={360} cy={210} rx={65} ry={35} fill="#0b1510" stroke="#142418" stroke
-<text x={360} y={214} fill="#162818" fontSize={7} textAnchor="middle" fontFamily=
-<rect x={440} y={260} width={130} height={12} fill="#0a1218" rx={6} stroke="#121e
-<text x={505} y={270} fill="#121e28" fontSize={7} textAnchor="middle" fontFamily=
-{draws.map(d => <polyline key={d.id} points={d.points.map(p => `${p.x},${p.y}`).j
-{stroke && <polyline points={stroke.map(p => `${p.x},${p.y}`).join(" ")} fill="no
-{selNode && nodes.filter(n => n.id !== selNode).map(n => {
-const s = nodes.find(x => x.id === selNode); if (!s) return null;
-const d = px2mi(dist(s, n)).toFixed(1);
-const mx = (s.x+n.x)/2, my = (s.y+n.y)/2;
-return <g key={n.id}><line x1={s.x} y1={s.y} x2={n.x} y2={n.y} stroke="#141e28"
-<rect x={mx-18} y={my-7} width={36} height={12} fill="#0a0e14" rx={2} stroke=
-<text x={mx} y={my+2} fill="#3a5060" fontSize={8} textAnchor="middle" fontFam
-})}
-{nodes.map(node => {
-const isSel = selNode === node.id;
-const cnt = node.equipment.reduce((s, e) => s + e.count, 0);
-const nl = log.nodes.find(r => r.nodeId === node.id);
-return (
-<g key={node.id} onMouseDown={e => onNodeDrag(e, node.id)} onClick={e => onNo
-{isSel && <circle cx={node.x} cy={node.y} r={30} fill="none" stroke="#7dd3a
-<circle cx={node.x} cy={node.y} r={18} fill="#0c1420" stroke={isSel ? "#7dd
-<circle cx={node.x} cy={node.y} r={2.5} fill={cnt > 0 ? "#7dd3a8" : "#1e2e3
-<text x={node.x} y={node.y + 28} fill={isSel ? "#7dd3a8" : "#3a5060"} fontS
-{cnt > 0 && <>
-<rect x={node.x+10} y={node.y-22} width={16} height={12} fill="#0c1420" s
-<text x={node.x+18} y={node.y-13} fill="#7dd3a8" fontSize={8} textAnchor=
-</>}
-{nl && nl.totalFuel > 0 && <text x={node.x} y={node.y+38} fill="#2a4040" fo
-</g>
-);
-})}
-<g transform="translate(14,14)">
-<line x1={0} y1={0} x2={67} y2={0} stroke="#182430" strokeWidth={1}/><line x1={
-<text x={33} y={-5} fill="#182430" fontSize={7} textAnchor="middle" fontFamily=
-</g>
-</svg>
-{editData && (
-<div style={{ position: "absolute", top: 10, left: 10, zIndex: 20 }}>
-<ManifestEditor node={editData} onUpdate={updateNode} onClose={() => setEditNod
-<button onClick={() => removeNode(editData.id)} style={{ marginTop: 3, width: "
-</div>
-)}
-<div style={{ position: "absolute", bottom: 8, left: 8, background: "#0a0e14dd", bo
-{placing ? <span style={{ color: "#7dd3a8" }}>Click map to place</span> : drawMod
-</div>
-</div>
-{/* RIGHT */}
-<div style={{ width: 290, background: "#0a0e14", borderLeft: "1px solid #141c24", dis
-<div style={{ display: "flex", borderBottom: "1px solid #141c24" }}>
-{["logistics", "chat"].map(t => (
-<button key={t} onClick={() => setRightTab(t)} style={{
-flex: 1, padding: "7px 0", background: rightTab === t ? "#0c1218" : "transpar
-border: "none", borderBottom: rightTab === t ? "2px solid #7dd3a8" : "2px sol
-color: rightTab === t ? "#7dd3a8" : "#1e2e38", cursor: "pointer", fontSize: 1
-}}>{t === "chat" ? "AI Chat" : "Logistics"}</button>
-))}
-</div>
-{rightTab === "logistics" && (
-<div style={{ flex: 1, overflow: "auto", padding: 10 }}>
-{log.totalFuel === 0 ? (
-<div style={{ color: "#1e2e38", padding: 16, textAlign: "center", fontSize: 1
-<div style={{ fontSize: 28, opacity: 0.2, marginBottom: 8 }}>⬡</div>
-Click a location on the map<br/>and add equipment to see<br/>logistics calc
-</div>
-) : (
-<>
-<div style={{ background: "#0c1520", border: "1px solid #141e28", padding:
-<div style={{ color: "#1e3040", fontSize: 8, textTransform: "uppercase",
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-<div><div style={{ color: "#2a3a4a", fontSize: 8 }}>Fuel Required</div>
-<div><div style={{ color: "#2a3a4a", fontSize: 8 }}>HEMTT Loads</div><d
-<div><div style={{ color: "#2a3a4a", fontSize: 8 }}>Personnel</div><div
-<div><div style={{ color: "#2a3a4a", fontSize: 8 }}>Active Sites</div><
-</div>
-</div>
-{log.nodes.filter(n => n.totalFuel > 0).map(nr => (
-<div key={nr.nodeId} style={{ border: "1px solid #111820", marginBottom:
-<div style={{ display: "flex", justifyContent: "space-between", marginB
-<span style={{ color: "#7dd3a8", fontWeight: 600, fontSize: 11 }}>{nr
-<span style={{ color: "#d8a040", fontWeight: 600 }}>{nr.totalFuel.toL
-</div>
-{nr.items.map((eq, i) => (
-<div key={i} style={{ display: "flex", justifyContent: "space-between
-<span>{eq.count}× {eq.name}</span>
-<span><span style={{ color: eq.pct < 30 ? "#c06060" : "#4a7a5a" }}>
-</div>
-))}
-</div>
-<div style={{ color: "#2a3a4a", fontSize: 8, marginTop: 3, textAlign: "
-))}
-</>
-)}
-</div>
-)}
-"hidde
-{rightTab === "chat" && (
-<div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: <div style={{ flex: 1, overflow: "auto", padding: 10 }}>
-{chat.map((m, i) => (
-<div key={i} style={{ marginBottom: 10 }}>
-<div style={{ color: m.role === "user" ? "#5a88b0" : m.role === "system"
-{m.role === "user" ? "You" : m.role === "system" ? "System" : "TACLOG A
-</div>
-<div style={{ color: m.role === "system" ? "#2a4838" : "#90a890", fontSiz
-</div>
-))}
-{chatLoad && <div style={{ color: "#2a4838", fontSize: 10, fontStyle: "italic
-<div ref={chatEnd}/>
-</div>
-<div style={{ padding: 8, borderTop: "1px solid #141c24", display: "flex", gap:
-<input value={chatIn} onChange={e => setChatIn(e.target.value)} onKeyDown={e
-placeholder="Ask about logistics..." style={{ flex: 1, background: "#080c10
-<button onClick={sendChat} disabled={chatLoad} style={{ padding: "6px 10px",
-</div>
-</div>
-)}
-</div>
-</div>
-</div>
-);
+
+@layer utilities {
+  .panel-shadow {
+    box-shadow: 0 2px 12px -2px hsl(0 0% 0% / 0.4);
+  }
+  .card-shadow {
+    box-shadow: 0 1px 4px -1px hsl(0 0% 0% / 0.3);
+  }
 }
