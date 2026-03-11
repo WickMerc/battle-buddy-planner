@@ -439,6 +439,7 @@ export default function Index() {
               onAddLocation={() => { setAddLocationMode(true); setDrawMode(false); }}
               onDrawShape={() => { setDrawMode(true); setAddLocationMode(false); }}
               onLoadExample={loadExample}
+              onDismiss={() => setQuickStartDismissed(true)}
             />
           )}
 
