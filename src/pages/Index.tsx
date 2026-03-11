@@ -72,6 +72,7 @@ export default function Index() {
   const [chatLoad, setChatLoad] = useState(false);
   const [rightTab, setRightTab] = useState<"logistics" | "chat">("logistics");
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [quickStartDismissed, setQuickStartDismissed] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [addLocationMode, setAddLocationMode] = useState(false);
   const [pendingName, setPendingName] = useState<{ id: string } | null>(null);
@@ -290,7 +291,7 @@ export default function Index() {
   const editData = nodes.find(n => n.id === editNode);
   const routeLine: [number, number, number, number] | null =
     routeAnalysis ? [routeAnalysis.from.lng, routeAnalysis.from.lat, routeAnalysis.to.lng, routeAnalysis.to.lat] : null;
-  const showQuickStart = nodes.length === 0 && !addLocationMode && !drawMode;
+  const showQuickStart = nodes.length === 0 && !addLocationMode && !drawMode && !quickStartDismissed;
 
   const closeManifest = () => setEditNode(null);
 
@@ -438,6 +439,7 @@ export default function Index() {
               onAddLocation={() => { setAddLocationMode(true); setDrawMode(false); }}
               onDrawShape={() => { setDrawMode(true); setAddLocationMode(false); }}
               onLoadExample={loadExample}
+              onDismiss={() => setQuickStartDismissed(true)}
             />
           )}
 
