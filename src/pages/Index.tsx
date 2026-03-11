@@ -5,11 +5,13 @@ import {
 } from "@/lib/taclog-data";
 import { EQUIPMENT_DB } from "@/lib/equipment-db";
 import { computeRouteAnalysis, buildRouteCtx, type RouteAnalysis } from "@/lib/route-analysis";
+import type { BriefingData } from "@/lib/briefing-types";
 import ManifestEditor from "@/components/taclog/ManifestEditor";
 import LogisticsPanel from "@/components/taclog/LogisticsPanel";
 import ChatPanel from "@/components/taclog/ChatPanel";
 import MapboxMap from "@/components/taclog/MapboxMap";
 import RouteAnalysisCard from "@/components/taclog/RouteAnalysisCard";
+import BriefingOverlay from "@/components/taclog/BriefingOverlay";
 import { forward as toMgrs } from "mgrs";
 
 const INITIAL_NODES: MapNode[] = [
