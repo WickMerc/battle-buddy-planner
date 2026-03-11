@@ -304,7 +304,6 @@ return (
 <span className="text-primary font-medium text-[14px] tracking-[2px]">⬡ TACLOG</span>
 </div>
 
-```
     {/* Center: Action buttons — wrap on small screens */}
     <div className="flex flex-wrap gap-1 items-center order-3 w-full sm:w-auto sm:order-2 mt-1 sm:mt-0">
       <button
