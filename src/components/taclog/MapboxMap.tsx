@@ -8,8 +8,7 @@ import {
 } from "@/lib/taclog-data";
 import { EQUIPMENT_DB } from "@/lib/equipment-db";
 
-// Use env variable ONLY — no hardcoded fallback token
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "";
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "pk.eyJ1IjoiaGFkbGVlMDA3IiwiYSI6ImNtbWxweHF6MTA5dTEyd3IweGhmN2o5cXQifQ.LNSYqm7nCsSU4tpsN130sg";
 
 const STYLES = [
   { id: "mapbox://styles/mapbox/outdoors-v12", label: "Terrain" },
