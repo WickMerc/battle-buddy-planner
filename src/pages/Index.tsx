@@ -143,7 +143,7 @@ export default function Index() {
     setTimeout(() => {
       setChat(prev => [...prev, {
         role: "assistant",
-        text: `Based on the current ${hours}hr operational window:\n\nTotal fuel requirement: ${log.fuel.toLocaleString()} gallons\nHEMTT sorties needed: ${log.hemtt}\nTotal personnel: ${log.crew}\n\nNote: AI chat requires backend integration. Connect to Lovable Cloud to enable full AI analysis.`,
+        text: `Based on the current ${hours}hr operational window:\n\nTotal fuel requirement: ${log.fuel.toLocaleString()} gallons\nHEMTT sorties needed: ${log.hemtt}\nTotal personnel: ${log.crew}\n\nNote: AI chat requires backend integration to enable full AI analysis.`,
       }]);
       setChatLoad(false);
     }, 800);
