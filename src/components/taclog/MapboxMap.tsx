@@ -342,6 +342,10 @@ export default function MapboxMap({
           <span className="text-tac-info font-semibold">Draw a circle or rectangle to create a location</span>
         ) : addLocationMode ? (
           <span className="text-tac-info font-semibold">Click on the map to place a new location</span>
+        ) : routeMode ? (
+          <span style={{ color: '#d97706', fontWeight: 600 }}>
+            {routeStart ? "Click destination location" : "Click start location for route analysis"}
+          </span>
         ) : (
           <span>
             Click location to edit · Drag to reposition
