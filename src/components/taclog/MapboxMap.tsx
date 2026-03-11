@@ -32,6 +32,7 @@ interface MapboxMapProps {
 
 export default function MapboxMap({
   nodes, selNode, log, drawMode, onNodeClick, onNodeDrag, onAddNode, onDeselectNode, addLocationMode,
+  routeMode, routeStart, routeLine,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
