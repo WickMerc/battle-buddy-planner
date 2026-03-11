@@ -329,6 +329,19 @@ export default function Index() {
               : "↗ Route Analysis"}
           </button>
           <div className="w-px h-[18px] bg-border mx-1" />
+          <button
+            onClick={() => briefing ? setBriefingOpen(true) : generateBriefing()}
+            disabled={briefingLoading}
+            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors font-semibold"
+            style={{
+              background: briefingLoading ? 'hsl(var(--muted))' : 'hsl(var(--primary))',
+              borderColor: 'hsl(var(--primary))',
+              color: briefingLoading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))',
+            }}
+          >
+            {briefingLoading ? "⏳ Generating..." : briefing ? "📋 View Briefing" : "📋 Generate Briefing"}
+          </button>
+          <div className="w-px h-[18px] bg-border mx-1" />
           <span className="text-muted-foreground text-[10px]">Mission:</span>
           <input
             type="range" min={1} max={72} value={hours}
