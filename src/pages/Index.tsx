@@ -460,6 +460,14 @@ export default function Index() {
           )}
         </div>
       </div>
+
+      {/* Briefing overlay */}
+      {briefingOpen && briefing && (
+        <BriefingOverlay
+          briefing={briefing}
+          onClose={() => setBriefingOpen(false)}
+        />
+      )}
     </div>
   );
 }
