@@ -54,7 +54,7 @@ localStorage.setItem(MAP_VIEW_KEY, JSON.stringify({ center, zoom }));
 
 export default function Index() {
 const [eqDb, setEqDb] = useState<EquipmentDB>(() => {
-const db: EquipmentDB = { …DEFAULT_EQUIPMENT };
+const db: EquipmentDB = { ...DEFAULT_EQUIPMENT };
 EQUIPMENT_DB.forEach(eq => {
 db[eq.id] = { name: eq.name, cat: eq.cat, fuelBurn: eq.fuelBurnMoving, fuelCap: eq.fuelCap, speed: eq.speed, crew: eq.crew };
 });
