@@ -12,11 +12,45 @@ import ChatPanel from "@/components/taclog/ChatPanel";
 import MapboxMap from "@/components/taclog/MapboxMap";
 import RouteAnalysisCard from "@/components/taclog/RouteAnalysisCard";
 import BriefingOverlay from "@/components/taclog/BriefingOverlay";
+import QuickStartCard from "@/components/taclog/QuickStartCard";
+import { useUndo } from "@/hooks/use-undo";
 
-const INITIAL_NODES: MapNode[] = [
-  { id: "n1", lng: -79.01, lat: 35.14, name: "FOB Alpha", shape: "point", equipment: [] },
-  { id: "n2", lng: -78.94, lat: 35.20, name: "LZ Bravo", shape: "point", equipment: [] },
+const EXAMPLE_NODES: MapNode[] = [
+  { id: "ex1", lng: -79.01, lat: 35.14, name: "FOB Alpha", shape: "point", equipment: [
+    { tid: "m1a2sep", count: 4, fuelPct: 85 },
+    { tid: "m2a3", count: 6, fuelPct: 70 },
+    { tid: "hemtt_tanker", count: 2, fuelPct: 100 },
+  ]},
+  { id: "ex2", lng: -78.94, lat: 35.20, name: "LZ Bravo", shape: "point", equipment: [
+    { tid: "uh60m", count: 3, fuelPct: 60 },
+    { tid: "ah64d", count: 2, fuelPct: 75 },
+  ]},
+  { id: "ex3", lng: -79.08, lat: 35.08, name: "FSB Charlie", shape: "point", equipment: [
+    { tid: "m109a7", count: 4, fuelPct: 90 },
+    { tid: "fmtv_cargo", count: 3, fuelPct: 80 },
+    { tid: "hmmwv", count: 6, fuelPct: 95 },
+  ]},
+  { id: "ex4", lng: -78.88, lat: 35.12, name: "MSR Delta Supply Point", shape: "point", equipment: [
+    { tid: "hemtt_cargo", count: 4, fuelPct: 100 },
+    { tid: "pls", count: 2, fuelPct: 90 },
+    { tid: "lmtv", count: 3, fuelPct: 85 },
+  ]},
 ];
+
+const MAP_VIEW_KEY = "taclog_map_view";
+
+function loadMapView(): { center: [number, number]; zoom: number } | null {
+  try {
+    const v = localStorage.getItem(MAP_VIEW_KEY);
+    return v ? JSON.parse(v) : null;
+  } catch { return null; }
+}
+
+export function saveMapView(center: [number, number], zoom: number) {
+  try {
+    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify({ center, zoom }));
+  } catch { /* */ }
+}
 
 export default function Index() {
   const [eqDb, setEqDb] = useState<EquipmentDB>(() => {
@@ -26,7 +60,8 @@ export default function Index() {
     });
     return db;
   });
-  const [nodes, setNodes] = useState<MapNode[]>(INITIAL_NODES);
+  
+  const { state: nodes, set: setNodes, undo, redo, canUndo, canRedo } = useUndo<MapNode[]>([]);
   const [selNode, setSelNode] = useState<string | null>(null);
   const [editNode, setEditNode] = useState<string | null>(null);
   const [hours, setHours] = useState(24);
@@ -43,25 +78,32 @@ export default function Index() {
   const [mgrsCoord, setMgrsCoord] = useState("");
   const nameInput = useRef<HTMLInputElement>(null);
 
-  // Route analysis state
   const [routeMode, setRouteMode] = useState(false);
   const [routeStart, setRouteStart] = useState<string | null>(null);
   const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysis | null>(null);
 
-  // Briefing state
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [briefingLoading, setBriefingLoading] = useState(false);
+
+  const savedMapView = useRef(loadMapView());
 
   useEffect(() => { if (pendingName && nameInput.current) nameInput.current.focus(); }, [pendingName]);
 
   const log = computeLog(nodes, eqDb, hours);
   const totalVehicles = nodes.reduce((s, n) => s + n.equipment.reduce((ss, e) => ss + e.count, 0), 0);
+  const locationNames = nodes.map(n => n.name);
 
   const addEquipType = (eq: { name: string; cat: string; fuelBurn: number; fuelCap: number; speed: number; crew: number }) => {
     const id = eq.name.toLowerCase().replace(/[^a-z0-9]/g, "_") + "_" + gid().substr(0, 4);
     setEqDb(prev => ({ ...prev, [id]: { ...eq } }));
   };
+
+  const loadExample = useCallback(() => {
+    setNodes(EXAMPLE_NODES);
+    setSelNode(null);
+    setEditNode(null);
+  }, [setNodes]);
 
   const onNodeClick = useCallback((id: string) => {
     if (routeMode) {
@@ -84,7 +126,7 @@ export default function Index() {
 
   const onNodeDrag = useCallback((id: string, lng: number, lat: number) => {
     setNodes(prev => prev.map(n => n.id === id ? { ...n, lng, lat } : n));
-  }, []);
+  }, [setNodes]);
 
   const onAddNode = useCallback((lng: number, lat: number, shape: "point" | "circle" | "rect", shapeData?: MapNode["shapeData"]) => {
     const newNode: MapNode = {
@@ -99,7 +141,7 @@ export default function Index() {
     setShapeName("");
     setAddLocationMode(false);
     setDrawMode(false);
-  }, []);
+  }, [setNodes]);
 
   const onDeselectNode = useCallback(() => {
     if (routeMode) return;
@@ -134,6 +176,15 @@ export default function Index() {
     const node = nodes.find(n => n.id === nodeId);
     if (node && (window as any).__taclogFlyTo) {
       (window as any).__taclogFlyTo(node.lng, node.lat);
+    }
+  }, [nodes]);
+
+  const onFlyToLocationByName = useCallback((name: string) => {
+    const node = nodes.find(n => n.name.toLowerCase() === name.toLowerCase());
+    if (node && (window as any).__taclogFlyTo) {
+      (window as any).__taclogFlyTo(node.lng, node.lat);
+      setSelNode(node.id);
+      setEditNode(node.id);
     }
   }, [nodes]);
 
@@ -173,8 +224,8 @@ export default function Index() {
     }
   };
 
-  const sendChat = async () => {
-    const msg = chatIn.trim();
+  const sendChat = async (directMsg?: string) => {
+    const msg = (directMsg || chatIn).trim();
     if (!msg || chatLoad) return;
     setChatIn("");
     const userMsg: ChatMessage = { role: "user", text: msg };
@@ -238,6 +289,7 @@ export default function Index() {
   const editData = nodes.find(n => n.id === editNode);
   const routeLine: [number, number, number, number] | null =
     routeAnalysis ? [routeAnalysis.from.lng, routeAnalysis.from.lat, routeAnalysis.to.lng, routeAnalysis.to.lat] : null;
+  const showQuickStart = nodes.length === 0 && !addLocationMode && !drawMode;
 
   return (
     <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden text-xs">
@@ -248,6 +300,26 @@ export default function Index() {
           <span className="text-muted-foreground text-[8px] tracking-[1px] uppercase">Tactical Logistics</span>
         </div>
         <div className="flex gap-1.5 items-center">
+          {/* Undo / Redo */}
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            className="px-2 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}
+            title="Undo (Ctrl+Z)"
+          >
+            ↩
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className="px-2 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            ↪
+          </button>
+          <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={() => { setAddLocationMode(!addLocationMode); setDrawMode(false); setRouteMode(false); setRouteStart(null); }}
             className="px-3 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200"
@@ -309,7 +381,7 @@ export default function Index() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* MANIFEST EDITOR — slide-out left panel */}
+        {/* MANIFEST EDITOR */}
         {editData && !pendingName && !routeMode && (
           <ManifestEditor
             node={editData}
@@ -343,7 +415,18 @@ export default function Index() {
             onNodeDrag={onNodeDrag}
             onAddNode={onAddNode}
             onDeselectNode={onDeselectNode}
+            initialView={savedMapView.current}
+            onViewChange={saveMapView}
           />
+
+          {/* Quick start card */}
+          {showQuickStart && (
+            <QuickStartCard
+              onAddLocation={() => { setAddLocationMode(true); setDrawMode(false); }}
+              onDrawShape={() => { setDrawMode(true); setAddLocationMode(false); }}
+              onLoadExample={loadExample}
+            />
+          )}
 
           {/* Naming dialog */}
           {pendingName && (
@@ -407,6 +490,8 @@ export default function Index() {
               setChatIn={setChatIn}
               chatLoad={chatLoad}
               onSend={sendChat}
+              onFlyToLocation={onFlyToLocationByName}
+              locationNames={locationNames}
             />
           )}
         </div>
