@@ -12,7 +12,6 @@ import ChatPanel from "@/components/taclog/ChatPanel";
 import MapboxMap from "@/components/taclog/MapboxMap";
 import RouteAnalysisCard from "@/components/taclog/RouteAnalysisCard";
 import BriefingOverlay from "@/components/taclog/BriefingOverlay";
-import { forward as toMgrs } from "mgrs";
 
 const INITIAL_NODES: MapNode[] = [
   { id: "n1", lng: -79.01, lat: 35.14, name: "FOB Alpha", shape: "point", equipment: [] },
@@ -41,6 +40,7 @@ export default function Index() {
   const [addLocationMode, setAddLocationMode] = useState(false);
   const [pendingName, setPendingName] = useState<{ id: string } | null>(null);
   const [shapeName, setShapeName] = useState("");
+  const [mgrsCoord, setMgrsCoord] = useState("");
   const nameInput = useRef<HTMLInputElement>(null);
 
   // Route analysis state
@@ -56,6 +56,7 @@ export default function Index() {
   useEffect(() => { if (pendingName && nameInput.current) nameInput.current.focus(); }, [pendingName]);
 
   const log = computeLog(nodes, eqDb, hours);
+  const totalVehicles = nodes.reduce((s, n) => s + n.equipment.reduce((ss, e) => ss + e.count, 0), 0);
 
   const addEquipType = (eq: { name: string; cat: string; fuelBurn: number; fuelCap: number; speed: number; crew: number }) => {
     const id = eq.name.toLowerCase().replace(/[^a-z0-9]/g, "_") + "_" + gid().substr(0, 4);
@@ -67,7 +68,6 @@ export default function Index() {
       if (!routeStart) {
         setRouteStart(id);
       } else if (id !== routeStart) {
-        // Compute route analysis
         const fromNode = nodes.find(n => n.id === routeStart);
         const toNode = nodes.find(n => n.id === id);
         if (fromNode && toNode) {
@@ -90,9 +90,7 @@ export default function Index() {
     const newNode: MapNode = {
       id: gid(), lng, lat,
       name: `Position ${Date.now() % 1000}`,
-      shape,
-      shapeData,
-      equipment: [],
+      shape, shapeData, equipment: [],
     };
     setNodes(prev => [...prev, newNode]);
     setSelNode(newNode.id);
@@ -104,7 +102,7 @@ export default function Index() {
   }, []);
 
   const onDeselectNode = useCallback(() => {
-    if (routeMode) return; // Don't deselect during route picking
+    if (routeMode) return;
     setSelNode(null);
     setEditNode(null);
   }, [routeMode]);
@@ -112,9 +110,7 @@ export default function Index() {
   const confirmName = () => {
     if (!pendingName) return;
     const name = shapeName.trim();
-    if (name) {
-      setNodes(prev => prev.map(n => n.id === pendingName.id ? { ...n, name } : n));
-    }
+    if (name) setNodes(prev => prev.map(n => n.id === pendingName.id ? { ...n, name } : n));
     setPendingName(null);
     setShapeName("");
   };
@@ -131,21 +127,20 @@ export default function Index() {
     setRouteMode(next);
     setRouteStart(null);
     setRouteAnalysis(null);
-    if (next) {
-      setAddLocationMode(false);
-      setDrawMode(false);
-      setEditNode(null);
-    }
+    if (next) { setAddLocationMode(false); setDrawMode(false); setEditNode(null); }
   };
+
+  const onFlyToNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && (window as any).__taclogFlyTo) {
+      (window as any).__taclogFlyTo(node.lng, node.lat);
+    }
+  }, [nodes]);
 
   const generateBriefing = async () => {
     if (briefingLoading) return;
     setBriefingLoading(true);
     const ctx = buildCtx(nodes, eqDb, log, hours);
-    if (routeAnalysis) {
-      // include route context too
-    }
-
     try {
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/taclog-chat`,
@@ -158,30 +153,21 @@ export default function Index() {
           body: JSON.stringify({ mode: "briefing", context: ctx }),
         }
       );
-
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || `HTTP ${resp.status}`);
       }
-
       const data = await resp.json();
       if (data.briefing) {
-        const briefingData: BriefingData = {
+        setBriefing({
           ...data.briefing,
-          generatedAt: new Date().toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-        };
-        setBriefing(briefingData);
+          generatedAt: new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }),
+        });
         setBriefingOpen(true);
       }
     } catch (e) {
       console.error("Briefing error:", e);
-      setChat(prev => [...prev, {
-        role: "system",
-        text: `Briefing generation failed: ${e instanceof Error ? e.message : "Unknown error"}`,
-      }]);
+      setChat(prev => [...prev, { role: "system", text: `Briefing failed: ${e instanceof Error ? e.message : "Unknown error"}` }]);
     } finally {
       setBriefingLoading(false);
     }
@@ -194,52 +180,38 @@ export default function Index() {
     const userMsg: ChatMessage = { role: "user", text: msg };
     setChat(prev => [...prev, userMsg]);
     setChatLoad(true);
-
     let ctx = buildCtx(nodes, eqDb, log, hours);
-    // Append route analysis context if available
-    if (routeAnalysis) {
-      ctx += buildRouteCtx(routeAnalysis);
-    }
+    if (routeAnalysis) ctx += buildRouteCtx(routeAnalysis);
     const apiMessages = [...chat.filter(m => m.role !== "system"), userMsg];
-
     try {
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/taclog-chat`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
           body: JSON.stringify({ messages: apiMessages, context: ctx }),
         }
       );
-
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || `HTTP ${resp.status}`);
       }
-
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let assistantText = "";
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-
         let newlineIdx: number;
         while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
           let line = buffer.slice(0, newlineIdx);
           buffer = buffer.slice(newlineIdx + 1);
           if (line.endsWith("\r")) line = line.slice(0, -1);
           if (!line.startsWith("data: ") || line.trim() === "") continue;
-
           const jsonStr = line.slice(6).trim();
           if (jsonStr === "[DONE]") break;
-
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.delta?.text || parsed.choices?.[0]?.delta?.content;
@@ -248,112 +220,107 @@ export default function Index() {
               const text = assistantText;
               setChat(prev => {
                 const last = prev[prev.length - 1];
-                if (last?.role === "assistant") {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, text } : m);
-                }
+                if (last?.role === "assistant") return prev.map((m, i) => i === prev.length - 1 ? { ...m, text } : m);
                 return [...prev, { role: "assistant", text }];
               });
             }
-          } catch {
-            // partial JSON, ignore
-          }
+          } catch { /* partial JSON */ }
         }
       }
     } catch (e) {
       console.error("Chat error:", e);
-      setChat(prev => [...prev, {
-        role: "system",
-        text: `Error: ${e instanceof Error ? e.message : "Failed to reach AI"}. Check your API key configuration.`,
-      }]);
+      setChat(prev => [...prev, { role: "system", text: `Error: ${e instanceof Error ? e.message : "Failed to reach AI"}` }]);
     } finally {
       setChatLoad(false);
     }
   };
 
   const editData = nodes.find(n => n.id === editNode);
-
-  let editMgrs = "";
-  if (editData) {
-    try { editMgrs = toMgrs([editData.lng, editData.lat], 5); } catch { editMgrs = ""; }
-  }
-
-  // Route line data for map
   const routeLine: [number, number, number, number] | null =
     routeAnalysis ? [routeAnalysis.from.lng, routeAnalysis.from.lat, routeAnalysis.to.lng, routeAnalysis.to.lat] : null;
 
   return (
-    <div className="w-full h-screen flex flex-col bg-background font-mono text-foreground overflow-hidden text-xs">
+    <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden text-xs">
       {/* TOOLBAR */}
-      <div className="flex items-center justify-between px-3.5 py-1.5 bg-card border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-card border-b border-border/50 shrink-0 panel-shadow relative z-30">
         <div className="flex items-center gap-2.5">
-          <span className="text-primary font-extrabold text-[15px] tracking-[2px]">⬡ TACLOG</span>
-          <span className="text-muted-foreground text-[9px] tracking-[1px]">TACTICAL LOGISTICS PLANNER</span>
+          <span className="text-primary font-medium text-[14px] tracking-[2px]">⬡ TACLOG</span>
+          <span className="text-muted-foreground text-[8px] tracking-[1px] uppercase">Tactical Logistics</span>
         </div>
         <div className="flex gap-1.5 items-center">
           <button
             onClick={() => { setAddLocationMode(!addLocationMode); setDrawMode(false); setRouteMode(false); setRouteStart(null); }}
-            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
+            className="px-3 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200"
             style={{
-              background: addLocationMode ? 'hsl(var(--primary) / 0.1)' : 'white',
+              background: addLocationMode ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--card))',
               borderColor: addLocationMode ? 'hsl(var(--primary))' : 'hsl(var(--border))',
               color: addLocationMode ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
-              fontWeight: addLocationMode ? 600 : 400,
+              fontWeight: addLocationMode ? 500 : 400,
             }}
           >
-            {addLocationMode ? "⊕ Click map to place" : "⊕ Add Location"}
+            {addLocationMode ? "⊕ Click to place" : "⊕ Add Location"}
           </button>
           <button
             onClick={() => { setDrawMode(!drawMode); setAddLocationMode(false); setRouteMode(false); setRouteStart(null); }}
-            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
+            className="px-3 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200"
             style={{
-              background: drawMode ? 'hsl(var(--tac-blue) / 0.1)' : 'white',
+              background: drawMode ? 'hsl(var(--tac-blue) / 0.1)' : 'hsl(var(--card))',
               borderColor: drawMode ? 'hsl(var(--tac-blue))' : 'hsl(var(--border))',
               color: drawMode ? 'hsl(var(--tac-blue))' : 'hsl(var(--muted-foreground))',
-              fontWeight: drawMode ? 600 : 400,
+              fontWeight: drawMode ? 500 : 400,
             }}
           >
-            {drawMode ? "✎ Drawing — draw a shape" : "✎ Draw Shape"}
+            {drawMode ? "✎ Drawing" : "✎ Draw Shape"}
           </button>
           <button
             onClick={toggleRouteMode}
-            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
+            className="px-3 py-1 text-[10px] border cursor-pointer rounded transition-all duration-200"
             style={{
-              background: routeMode ? 'hsl(var(--tac-amber) / 0.15)' : 'white',
-              borderColor: routeMode ? 'hsl(var(--tac-amber, 36 80% 50%))' : 'hsl(var(--border))',
-              color: routeMode ? 'hsl(var(--tac-amber, 36 80% 50%))' : 'hsl(var(--muted-foreground))',
-              fontWeight: routeMode ? 600 : 400,
+              background: routeMode ? 'hsl(var(--tac-amber) / 0.12)' : 'hsl(var(--card))',
+              borderColor: routeMode ? 'hsl(var(--tac-amber))' : 'hsl(var(--border))',
+              color: routeMode ? 'hsl(var(--tac-amber))' : 'hsl(var(--muted-foreground))',
+              fontWeight: routeMode ? 500 : 400,
             }}
           >
-            {routeMode
-              ? (routeStart ? "↗ Click destination" : "↗ Click start location")
-              : "↗ Route Analysis"}
+            {routeMode ? (routeStart ? "↗ Click dest" : "↗ Click start") : "↗ Route"}
           </button>
-          <div className="w-px h-[18px] bg-border mx-1" />
+          <div className="w-px h-4 bg-border mx-0.5" />
           <button
             onClick={() => briefing ? setBriefingOpen(true) : generateBriefing()}
             disabled={briefingLoading}
-            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors font-semibold"
+            className="px-3 py-1 text-[10px] border-0 cursor-pointer rounded transition-all duration-200 font-medium"
             style={{
               background: briefingLoading ? 'hsl(var(--muted))' : 'hsl(var(--primary))',
-              borderColor: 'hsl(var(--primary))',
               color: briefingLoading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))',
             }}
           >
             {briefingLoading ? "⏳ Generating..." : briefing ? "📋 View Briefing" : "📋 Generate Briefing"}
           </button>
-          <div className="w-px h-[18px] bg-border mx-1" />
-          <span className="text-muted-foreground text-[10px]">Mission:</span>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <span className="text-muted-foreground text-[9px]">Mission</span>
           <input
             type="range" min={1} max={72} value={hours}
             onChange={e => setHours(+e.target.value)}
-            className="w-20"
+            className="w-16"
             style={{ accentColor: 'hsl(var(--primary))' }}
           />
-          <span className="text-primary font-bold text-[13px] min-w-[32px]">{hours}h</span>
+          <span className="text-primary font-medium text-[12px] min-w-[28px]">{hours}h</span>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* MANIFEST EDITOR — slide-out left panel */}
+        {editData && !pendingName && !routeMode && (
+          <ManifestEditor
+            node={editData}
+            eqDb={eqDb}
+            onUpdate={updateNode}
+            onClose={() => setEditNode(null)}
+            onRemove={() => removeNode(editData.id)}
+            onAddEquipType={addEquipType}
+          />
+        )}
+
         {/* MAP */}
         <div className="flex-1 relative overflow-hidden">
           <MapboxMap
@@ -361,75 +328,58 @@ export default function Index() {
             selNode={selNode}
             log={log}
             drawMode={drawMode}
+            eqDb={eqDb}
             addLocationMode={addLocationMode}
             routeMode={routeMode}
             routeStart={routeStart}
             routeLine={routeLine}
+            mgrsCoord={mgrsCoord}
+            onMgrsChange={setMgrsCoord}
+            totalLocations={nodes.length}
+            totalVehicles={totalVehicles}
+            totalFuel={log.fuel}
+            hours={hours}
             onNodeClick={onNodeClick}
             onNodeDrag={onNodeDrag}
             onAddNode={onAddNode}
             onDeselectNode={onDeselectNode}
           />
 
-          {/* Naming dialog for new location */}
+          {/* Naming dialog */}
           {pendingName && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border-2 border-tac-info rounded-lg p-3.5 w-[220px] shadow-lg z-30">
-              <div className="text-[11px] font-semibold text-tac-info mb-1.5">
-                Name this location:
-              </div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-3.5 w-[220px] panel-shadow z-30">
+              <div className="text-[10px] font-medium text-primary mb-1.5">Name this location:</div>
               <input
                 ref={nameInput}
                 value={shapeName}
                 onChange={e => setShapeName(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && confirmName()}
                 placeholder="e.g. FOB Delta, LZ Hawk..."
-                className="w-full p-1.5 border border-border rounded font-mono text-xs outline-none mb-2"
+                className="w-full p-1.5 border border-border rounded text-xs outline-none mb-2 bg-background"
               />
               <div className="flex gap-1.5">
-                <button onClick={confirmName} className="flex-1 p-1.5 bg-tac-info border-none text-white rounded cursor-pointer font-mono font-semibold text-[11px]">Confirm</button>
-                <button onClick={() => setPendingName(null)} className="px-2.5 p-1.5 bg-white border border-border text-secondary-foreground rounded cursor-pointer font-mono text-[11px]">Skip</button>
+                <button onClick={confirmName} className="flex-1 p-1.5 bg-primary border-none text-primary-foreground rounded cursor-pointer font-medium text-[10px]">Confirm</button>
+                <button onClick={() => setPendingName(null)} className="px-2.5 p-1.5 bg-card border border-border text-secondary-foreground rounded cursor-pointer text-[10px]">Skip</button>
               </div>
-            </div>
-          )}
-
-          {/* Editor overlay */}
-          {editData && !pendingName && !routeMode && (
-            <div className="absolute top-2.5 left-2.5 z-20">
-              {editMgrs && (
-                <div className="bg-card/90 border border-border rounded px-2 py-0.5 mb-1 text-[9px] text-muted-foreground font-mono">
-                  MGRS: <span className="text-primary font-semibold">{editMgrs}</span>
-                </div>
-              )}
-              <ManifestEditor
-                node={editData}
-                eqDb={eqDb}
-                onUpdate={updateNode}
-                onClose={() => setEditNode(null)}
-                onRemove={() => removeNode(editData.id)}
-                onAddEquipType={addEquipType}
-              />
             </div>
           )}
 
           {/* Route analysis card */}
           {routeAnalysis && (
             <div className="absolute top-2.5 left-2.5 z-20">
-              <RouteAnalysisCard
-                analysis={routeAnalysis}
-                onClose={() => setRouteAnalysis(null)}
-              />
+              <RouteAnalysisCard analysis={routeAnalysis} onClose={() => setRouteAnalysis(null)} />
             </div>
           )}
         </div>
 
         {/* RIGHT PANEL */}
-        <div className="w-[300px] bg-card border-l border-border flex flex-col shrink-0">
-          <div className="flex border-b border-border">
+        <div className="w-[280px] bg-card flex flex-col shrink-0 panel-shadow">
+          <div className="flex border-b border-border/50">
             {(["logistics", "chat"] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setRightTab(t)}
-                className="flex-1 py-2 border-0 cursor-pointer text-[10px] uppercase tracking-[1.5px] font-mono font-semibold transition-colors"
+                className="flex-1 py-2 border-0 cursor-pointer text-[9px] uppercase tracking-[1.5px] font-medium transition-all duration-200"
                 style={{
                   background: rightTab === t ? 'hsl(var(--card))' : 'hsl(var(--secondary))',
                   borderBottom: rightTab === t ? '2px solid hsl(var(--primary))' : '2px solid transparent',
@@ -446,6 +396,7 @@ export default function Index() {
               log={log}
               hours={hours}
               onSelectNode={(id) => { setSelNode(id); setEditNode(id); }}
+              onFlyTo={onFlyToNode}
             />
           )}
 
@@ -463,10 +414,7 @@ export default function Index() {
 
       {/* Briefing overlay */}
       {briefingOpen && briefing && (
-        <BriefingOverlay
-          briefing={briefing}
-          onClose={() => setBriefingOpen(false)}
-        />
+        <BriefingOverlay briefing={briefing} onClose={() => setBriefingOpen(false)} />
       )}
     </div>
   );
