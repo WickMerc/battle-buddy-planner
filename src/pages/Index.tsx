@@ -536,7 +536,7 @@ return (
     <BriefingOverlay briefing={briefing} onClose={() => setBriefingOpen(false)} />
   )}
 </div>
-```
+
 
 );
 }
