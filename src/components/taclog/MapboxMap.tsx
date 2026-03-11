@@ -179,7 +179,7 @@ export default function MapboxMap({
   // ── DISTANCE LABELS: Use Mapbox markers so they follow pan/zoom ──
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !map.isStyleLoaded()) return;
 
     // Clear old distance markers
     Object.values(distMarkersRef.current).forEach(m => m.remove());
