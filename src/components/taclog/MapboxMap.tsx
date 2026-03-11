@@ -198,6 +198,48 @@ export default function MapboxMap({
     addShapeLayers(map, nodes);
   }, [nodes]);
 
+  // Route line layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const addRouteLine = () => {
+      if (map.getLayer("taclog-route-line")) map.removeLayer("taclog-route-line");
+      if (map.getLayer("taclog-route-line-dash")) map.removeLayer("taclog-route-line-dash");
+      if (map.getSource("taclog-route")) map.removeSource("taclog-route");
+
+      if (!routeLine) return;
+
+      const [lng1, lat1, lng2, lat2] = routeLine;
+      map.addSource("taclog-route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[lng1, lat1], [lng2, lat2]] },
+        },
+      });
+      map.addLayer({
+        id: "taclog-route-line",
+        type: "line",
+        source: "taclog-route",
+        paint: { "line-color": "#d97706", "line-width": 3, "line-opacity": 0.8 },
+      });
+      map.addLayer({
+        id: "taclog-route-line-dash",
+        type: "line",
+        source: "taclog-route",
+        paint: { "line-color": "#fbbf24", "line-width": 1.5, "line-dasharray": [4, 4], "line-opacity": 0.9 },
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      addRouteLine();
+    } else {
+      map.once("style.load", addRouteLine);
+    }
+  }, [routeLine]);
+
   // Drawing overlay for shape creation
   useEffect(() => {
     const canvas = canvasOverlayRef.current;
