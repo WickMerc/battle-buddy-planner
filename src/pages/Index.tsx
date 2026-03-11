@@ -126,7 +126,7 @@ setEditNode(id);
 }, [routeMode, routeStart, nodes, eqDb]);
 
 const onNodeDrag = useCallback((id: string, lng: number, lat: number) => {
-setNodes(prev => prev.map(n => n.id === id ? { …n, lng, lat } : n));
+setNodes(prev => prev.map(n => n.id === id ? { ...n, lng, lat } : n));
 }, [setNodes]);
 
 const onAddNode = useCallback((lng: number, lat: number, shape: “point” | “circle” | “rect”, shapeData?: MapNode[“shapeData”]) => {
