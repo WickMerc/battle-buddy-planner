@@ -153,7 +153,7 @@ setEditNode(null);
 const confirmName = () => {
 if (!pendingName) return;
 const name = shapeName.trim();
-if (name) setNodes(prev => prev.map(n => n.id === pendingName.id ? { …n, name } : n));
+if (name) setNodes(prev => prev.map(n => n.id === pendingName.id ? { ...n, name } : n));
 setPendingName(null);
 setShapeName(””);
 };
