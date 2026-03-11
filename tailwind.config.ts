@@ -57,6 +57,20 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        tac: {
+          bg: "hsl(var(--tac-bg))",
+          panel: "hsl(var(--tac-panel))",
+          green: "hsl(var(--tac-green))",
+          amber: "hsl(var(--tac-amber))",
+          purple: "hsl(var(--tac-purple))",
+          blue: "hsl(var(--tac-blue))",
+          red: "hsl(var(--tac-red))",
+          dim: "hsl(var(--tac-dim))",
+          grid: "hsl(var(--tac-grid))",
+        },
+      },
+      fontFamily: {
+        mono: ["'IBM Plex Mono'", "'Courier New'", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
