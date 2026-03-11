@@ -4,10 +4,12 @@ import {
   type MapNode, type ChatMessage, type LogisticsResult, type EquipmentDB,
 } from "@/lib/taclog-data";
 import { EQUIPMENT_DB } from "@/lib/equipment-db";
+import { computeRouteAnalysis, buildRouteCtx, type RouteAnalysis } from "@/lib/route-analysis";
 import ManifestEditor from "@/components/taclog/ManifestEditor";
 import LogisticsPanel from "@/components/taclog/LogisticsPanel";
 import ChatPanel from "@/components/taclog/ChatPanel";
 import MapboxMap from "@/components/taclog/MapboxMap";
+import RouteAnalysisCard from "@/components/taclog/RouteAnalysisCard";
 import { forward as toMgrs } from "mgrs";
 
 const INITIAL_NODES: MapNode[] = [
@@ -17,7 +19,6 @@ const INITIAL_NODES: MapNode[] = [
 
 export default function Index() {
   const [eqDb, setEqDb] = useState<EquipmentDB>(() => {
-    // Seed legacy eqDb with all entries from the new comprehensive database
     const db: EquipmentDB = { ...DEFAULT_EQUIPMENT };
     EQUIPMENT_DB.forEach(eq => {
       db[eq.id] = { name: eq.name, cat: eq.cat, fuelBurn: eq.fuelBurnMoving, fuelCap: eq.fuelCap, speed: eq.speed, crew: eq.crew };
@@ -40,6 +41,11 @@ export default function Index() {
   const [shapeName, setShapeName] = useState("");
   const nameInput = useRef<HTMLInputElement>(null);
 
+  // Route analysis state
+  const [routeMode, setRouteMode] = useState(false);
+  const [routeStart, setRouteStart] = useState<string | null>(null);
+  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysis | null>(null);
+
   useEffect(() => { if (pendingName && nameInput.current) nameInput.current.focus(); }, [pendingName]);
 
   const log = computeLog(nodes, eqDb, hours);
@@ -50,9 +56,24 @@ export default function Index() {
   };
 
   const onNodeClick = useCallback((id: string) => {
+    if (routeMode) {
+      if (!routeStart) {
+        setRouteStart(id);
+      } else if (id !== routeStart) {
+        // Compute route analysis
+        const fromNode = nodes.find(n => n.id === routeStart);
+        const toNode = nodes.find(n => n.id === id);
+        if (fromNode && toNode) {
+          setRouteAnalysis(computeRouteAnalysis(fromNode, toNode, eqDb));
+        }
+        setRouteMode(false);
+        setRouteStart(null);
+      }
+      return;
+    }
     setSelNode(id);
     setEditNode(id);
-  }, []);
+  }, [routeMode, routeStart, nodes, eqDb]);
 
   const onNodeDrag = useCallback((id: string, lng: number, lat: number) => {
     setNodes(prev => prev.map(n => n.id === id ? { ...n, lng, lat } : n));
@@ -76,9 +97,10 @@ export default function Index() {
   }, []);
 
   const onDeselectNode = useCallback(() => {
+    if (routeMode) return; // Don't deselect during route picking
     setSelNode(null);
     setEditNode(null);
-  }, []);
+  }, [routeMode]);
 
   const confirmName = () => {
     if (!pendingName) return;
@@ -97,6 +119,18 @@ export default function Index() {
     if (selNode === id) setSelNode(null);
   };
 
+  const toggleRouteMode = () => {
+    const next = !routeMode;
+    setRouteMode(next);
+    setRouteStart(null);
+    setRouteAnalysis(null);
+    if (next) {
+      setAddLocationMode(false);
+      setDrawMode(false);
+      setEditNode(null);
+    }
+  };
+
   const sendChat = async () => {
     const msg = chatIn.trim();
     if (!msg || chatLoad) return;
@@ -105,8 +139,11 @@ export default function Index() {
     setChat(prev => [...prev, userMsg]);
     setChatLoad(true);
 
-    const ctx = buildCtx(nodes, eqDb, log, hours);
-    // Filter to only user/assistant messages for the API
+    let ctx = buildCtx(nodes, eqDb, log, hours);
+    // Append route analysis context if available
+    if (routeAnalysis) {
+      ctx += buildRouteCtx(routeAnalysis);
+    }
     const apiMessages = [...chat.filter(m => m.role !== "system"), userMsg];
 
     try {
@@ -179,11 +216,14 @@ export default function Index() {
 
   const editData = nodes.find(n => n.id === editNode);
 
-  // Get MGRS for selected node
   let editMgrs = "";
   if (editData) {
     try { editMgrs = toMgrs([editData.lng, editData.lat], 5); } catch { editMgrs = ""; }
   }
+
+  // Route line data for map
+  const routeLine: [number, number, number, number] | null =
+    routeAnalysis ? [routeAnalysis.from.lng, routeAnalysis.from.lat, routeAnalysis.to.lng, routeAnalysis.to.lat] : null;
 
   return (
     <div className="w-full h-screen flex flex-col bg-background font-mono text-foreground overflow-hidden text-xs">
@@ -195,7 +235,7 @@ export default function Index() {
         </div>
         <div className="flex gap-1.5 items-center">
           <button
-            onClick={() => { setAddLocationMode(!addLocationMode); setDrawMode(false); }}
+            onClick={() => { setAddLocationMode(!addLocationMode); setDrawMode(false); setRouteMode(false); setRouteStart(null); }}
             className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
             style={{
               background: addLocationMode ? 'hsl(var(--primary) / 0.1)' : 'white',
@@ -207,7 +247,7 @@ export default function Index() {
             {addLocationMode ? "⊕ Click map to place" : "⊕ Add Location"}
           </button>
           <button
-            onClick={() => { setDrawMode(!drawMode); setAddLocationMode(false); }}
+            onClick={() => { setDrawMode(!drawMode); setAddLocationMode(false); setRouteMode(false); setRouteStart(null); }}
             className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
             style={{
               background: drawMode ? 'hsl(var(--tac-blue) / 0.1)' : 'white',
@@ -217,6 +257,20 @@ export default function Index() {
             }}
           >
             {drawMode ? "✎ Drawing — draw a shape" : "✎ Draw Shape"}
+          </button>
+          <button
+            onClick={toggleRouteMode}
+            className="px-3.5 py-1.5 text-[11px] font-mono border cursor-pointer rounded transition-colors"
+            style={{
+              background: routeMode ? 'hsl(var(--tac-amber) / 0.15)' : 'white',
+              borderColor: routeMode ? 'hsl(var(--tac-amber, 36 80% 50%))' : 'hsl(var(--border))',
+              color: routeMode ? 'hsl(var(--tac-amber, 36 80% 50%))' : 'hsl(var(--muted-foreground))',
+              fontWeight: routeMode ? 600 : 400,
+            }}
+          >
+            {routeMode
+              ? (routeStart ? "↗ Click destination" : "↗ Click start location")
+              : "↗ Route Analysis"}
           </button>
           <div className="w-px h-[18px] bg-border mx-1" />
           <span className="text-muted-foreground text-[10px]">Mission:</span>
@@ -239,6 +293,9 @@ export default function Index() {
             log={log}
             drawMode={drawMode}
             addLocationMode={addLocationMode}
+            routeMode={routeMode}
+            routeStart={routeStart}
+            routeLine={routeLine}
             onNodeClick={onNodeClick}
             onNodeDrag={onNodeDrag}
             onAddNode={onAddNode}
@@ -267,7 +324,7 @@ export default function Index() {
           )}
 
           {/* Editor overlay */}
-          {editData && !pendingName && (
+          {editData && !pendingName && !routeMode && (
             <div className="absolute top-2.5 left-2.5 z-20">
               {editMgrs && (
                 <div className="bg-card/90 border border-border rounded px-2 py-0.5 mb-1 text-[9px] text-muted-foreground font-mono">
@@ -281,6 +338,16 @@ export default function Index() {
                 onClose={() => setEditNode(null)}
                 onRemove={() => removeNode(editData.id)}
                 onAddEquipType={addEquipType}
+              />
+            </div>
+          )}
+
+          {/* Route analysis card */}
+          {routeAnalysis && (
+            <div className="absolute top-2.5 left-2.5 z-20">
+              <RouteAnalysisCard
+                analysis={routeAnalysis}
+                onClose={() => setRouteAnalysis(null)}
               />
             </div>
           )}
