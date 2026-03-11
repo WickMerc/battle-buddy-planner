@@ -25,10 +25,14 @@ interface MapboxMapProps {
   onAddNode: (lng: number, lat: number, shape: "point" | "circle" | "rect", shapeData?: MapNode["shapeData"]) => void;
   onDeselectNode: () => void;
   addLocationMode: boolean;
+  routeMode?: boolean;
+  routeStart?: string | null;
+  routeLine?: [number, number, number, number] | null;
 }
 
 export default function MapboxMap({
   nodes, selNode, log, drawMode, onNodeClick, onNodeDrag, onAddNode, onDeselectNode, addLocationMode,
+  routeMode, routeStart, routeLine,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -105,14 +109,12 @@ export default function MapboxMap({
     const map = mapRef.current;
     if (!map) return;
     const canvas = map.getCanvasContainer();
-    if (addLocationMode) {
-      canvas.style.cursor = "crosshair";
-    } else if (drawMode) {
+    if (addLocationMode || drawMode || routeMode) {
       canvas.style.cursor = "crosshair";
     } else {
       canvas.style.cursor = "";
     }
-  }, [addLocationMode, drawMode]);
+  }, [addLocationMode, drawMode, routeMode]);
 
   // Style switching
   const switchStyle = useCallback((idx: number) => {
@@ -195,6 +197,48 @@ export default function MapboxMap({
     if (!map || !map.isStyleLoaded()) return;
     addShapeLayers(map, nodes);
   }, [nodes]);
+
+  // Route line layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const addRouteLine = () => {
+      if (map.getLayer("taclog-route-line")) map.removeLayer("taclog-route-line");
+      if (map.getLayer("taclog-route-line-dash")) map.removeLayer("taclog-route-line-dash");
+      if (map.getSource("taclog-route")) map.removeSource("taclog-route");
+
+      if (!routeLine) return;
+
+      const [lng1, lat1, lng2, lat2] = routeLine;
+      map.addSource("taclog-route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[lng1, lat1], [lng2, lat2]] },
+        },
+      });
+      map.addLayer({
+        id: "taclog-route-line",
+        type: "line",
+        source: "taclog-route",
+        paint: { "line-color": "#d97706", "line-width": 3, "line-opacity": 0.8 },
+      });
+      map.addLayer({
+        id: "taclog-route-line-dash",
+        type: "line",
+        source: "taclog-route",
+        paint: { "line-color": "#fbbf24", "line-width": 1.5, "line-dasharray": [4, 4], "line-opacity": 0.9 },
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      addRouteLine();
+    } else {
+      map.once("style.load", addRouteLine);
+    }
+  }, [routeLine]);
 
   // Drawing overlay for shape creation
   useEffect(() => {
@@ -340,6 +384,10 @@ export default function MapboxMap({
           <span className="text-tac-info font-semibold">Draw a circle or rectangle to create a location</span>
         ) : addLocationMode ? (
           <span className="text-tac-info font-semibold">Click on the map to place a new location</span>
+        ) : routeMode ? (
+          <span style={{ color: '#d97706', fontWeight: 600 }}>
+            {routeStart ? "Click destination location" : "Click start location for route analysis"}
+          </span>
         ) : (
           <span>
             Click location to edit · Drag to reposition
