@@ -212,7 +212,7 @@ throw new Error(err.error || `HTTP ${resp.status}`);
 const data = await resp.json();
 if (data.briefing) {
 setBriefing({
-…data.briefing,
+...data.briefing,
 generatedAt: new Date().toLocaleString(“en-US”, { dateStyle: “medium”, timeStyle: “short” }),
 });
 setBriefingOpen(true);
