@@ -138,6 +138,55 @@ export default function Index() {
     }
   };
 
+  const generateBriefing = async () => {
+    if (briefingLoading) return;
+    setBriefingLoading(true);
+    const ctx = buildCtx(nodes, eqDb, log, hours);
+    if (routeAnalysis) {
+      // include route context too
+    }
+
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/taclog-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ mode: "briefing", context: ctx }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      if (data.briefing) {
+        const briefingData: BriefingData = {
+          ...data.briefing,
+          generatedAt: new Date().toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        };
+        setBriefing(briefingData);
+        setBriefingOpen(true);
+      }
+    } catch (e) {
+      console.error("Briefing error:", e);
+      setChat(prev => [...prev, {
+        role: "system",
+        text: `Briefing generation failed: ${e instanceof Error ? e.message : "Unknown error"}`,
+      }]);
+    } finally {
+      setBriefingLoading(false);
+    }
+  };
+
   const sendChat = async () => {
     const msg = chatIn.trim();
     if (!msg || chatLoad) return;
