@@ -49,6 +49,8 @@ interface MapboxMapProps {
   totalVehicles: number;
   totalFuel: number;
   hours: number;
+  initialView?: { center: [number, number]; zoom: number } | null;
+  onViewChange?: (center: [number, number], zoom: number) => void;
 }
 
 export default function MapboxMap({
