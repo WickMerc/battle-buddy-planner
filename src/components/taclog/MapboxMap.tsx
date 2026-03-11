@@ -56,6 +56,7 @@ interface MapboxMapProps {
 export default function MapboxMap({
   nodes, selNode, log, drawMode, eqDb, onNodeClick, onNodeDrag, onAddNode, onDeselectNode, addLocationMode,
   routeMode, routeStart, routeLine, mgrsCoord, onMgrsChange, totalLocations, totalVehicles, totalFuel, hours,
+  initialView, onViewChange,
 }: MapboxMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -82,8 +83,8 @@ export default function MapboxMap({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: STYLES[0].id,
-      center: [-79.0, 35.14],
-      zoom: 10,
+      center: initialView?.center || [-79.0, 35.14],
+      zoom: initialView?.zoom || 10,
       pitchWithRotate: true,
     });
 
