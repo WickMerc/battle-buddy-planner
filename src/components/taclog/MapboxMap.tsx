@@ -8,7 +8,8 @@ import {
 } from "@/lib/taclog-data";
 import { EQUIPMENT_DB } from "@/lib/equipment-db";
 
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "pk.eyJ1IjoiaGFkbGVlMDA3IiwiYSI6ImNtbWxweHF6MTA5dTEyd3IweGhmN2o5cXQifQ.LNSYqm7nCsSU4tpsN130sg";
+// Use env variable ONLY — no hardcoded fallback token
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
 const STYLES = [
   { id: "mapbox://styles/mapbox/outdoors-v12", label: "Terrain" },
@@ -16,7 +17,6 @@ const STYLES = [
   { id: "mapbox://styles/mapbox/dark-v11", label: "Dark" },
 ];
 
-// SVG icon paths for categories
 const CAT_ICONS: Record<string, string> = {
   "Rotary Wing": `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h8m4 0h8M12 2v4m0 12v4"/><circle cx="12" cy="12" r="3"/></svg>`,
   "Armor": `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M12 8V4l4 4"/></svg>`,
@@ -61,17 +61,18 @@ export default function MapboxMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Record<string, mapboxgl.Marker>>({});
+  const distMarkersRef = useRef<Record<string, mapboxgl.Marker>>({});
+  const distLinesSourceAdded = useRef(false);
   const [styleIdx, setStyleIdx] = useState(0);
   const [drawing, setDrawing] = useState(false);
   const [strokePoints, setStrokePoints] = useState<{ x: number; y: number }[]>([]);
   const canvasOverlayRef = useRef<HTMLCanvasElement>(null);
 
-  // Expose flyTo for external use
+  // Expose flyTo
   const flyTo = useCallback((lng: number, lat: number) => {
     mapRef.current?.flyTo({ center: [lng, lat], zoom: 12, duration: 800 });
   }, []);
 
-  // Attach flyTo to window for logistics panel usage
   useEffect(() => {
     (window as any).__taclogFlyTo = flyTo;
     return () => { delete (window as any).__taclogFlyTo; };
@@ -155,11 +156,12 @@ export default function MapboxMap({
         map.addSource("mapbox-dem", { type: "raster-dem", url: "mapbox://mapbox.mapbox-terrain-dem-v1", tileSize: 512, maxzoom: 14 });
         map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
       }
+      distLinesSourceAdded.current = false;
       addShapeLayers(map, nodes);
     });
   }, [nodes]);
 
-  // Determine primary category for a node
+  // Primary category for node
   const getPrimaryCategory = (node: MapNode): string => {
     const catCounts: Record<string, number> = {};
     node.equipment.forEach(e => {
@@ -175,7 +177,91 @@ export default function MapboxMap({
     return maxCat;
   };
 
-  // Sync markers
+  // ── DISTANCE LABELS: Use Mapbox markers so they follow pan/zoom ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Clear old distance markers
+    Object.values(distMarkersRef.current).forEach(m => m.remove());
+    distMarkersRef.current = {};
+
+    // Remove old distance line layers/sources
+    const style = map.getStyle();
+    if (style?.layers) {
+      style.layers.forEach(l => {
+        if (l.id.startsWith("taclog-dist-line-")) map.removeLayer(l.id);
+      });
+    }
+    if (style?.sources) {
+      Object.keys(style.sources).forEach(s => {
+        if (s.startsWith("taclog-dist-line-")) map.removeSource(s);
+      });
+    }
+
+    const selNodeData = nodes.find(n => n.id === selNode);
+    if (!selNodeData) return;
+
+    nodes.filter(n => n.id !== selNode).forEach(n => {
+      const mi = haversineMi(selNodeData, n).toFixed(1);
+      const km = haversineKm(selNodeData, n).toFixed(1);
+      const midLng = (selNodeData.lng + n.lng) / 2;
+      const midLat = (selNodeData.lat + n.lat) / 2;
+
+      // Distance line as Mapbox layer
+      const lineSrcId = `taclog-dist-line-${n.id}`;
+      const lineLayerId = `taclog-dist-line-${n.id}`;
+      try {
+        map.addSource(lineSrcId, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: [[selNodeData.lng, selNodeData.lat], [n.lng, n.lat]],
+            },
+          },
+        });
+        map.addLayer({
+          id: lineLayerId,
+          type: "line",
+          source: lineSrcId,
+          paint: {
+            "line-color": "#6b7280",
+            "line-width": 1,
+            "line-dasharray": [5, 4],
+            "line-opacity": 0.5,
+          },
+        });
+      } catch { /* layer may already exist during rapid updates */ }
+
+      // Distance label as a Mapbox marker
+      const el = document.createElement("div");
+      el.style.cssText = `
+        background: hsl(40,22%,95%);
+        border: 1px solid hsl(40,12%,78%);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 600;
+        font-family: 'DM Mono', monospace;
+        color: hsl(90,8%,30%);
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      `;
+      el.textContent = `${mi}mi / ${km}km`;
+
+      const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+        .setLngLat([midLng, midLat])
+        .addTo(map);
+
+      distMarkersRef.current[n.id] = marker;
+    });
+  }, [selNode, nodes]);
+
+  // Sync node markers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -215,6 +301,12 @@ export default function MapboxMap({
         });
 
         el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!drawMode && !addLocationMode) onNodeClick(node.id);
+        });
+
+        // Touch support for iPad
+        el.addEventListener("touchend", (e) => {
           e.stopPropagation();
           if (!drawMode && !addLocationMode) onNodeClick(node.id);
         });
@@ -278,18 +370,29 @@ export default function MapboxMap({
     }
   }, [strokePoints]);
 
-  const onOverlayDown = (e: React.MouseEvent) => {
-    if (!drawMode) return;
+  // Helper: get x,y from mouse or touch event
+  const getXY = (e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null => {
     const rect = canvasOverlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setDrawing(true);
-    setStrokePoints([{ x: e.clientX - rect.left, y: e.clientY - rect.top }]);
+    if (!rect) return null;
+    if ("touches" in e) {
+      const t = e.touches[0] || (e as React.TouchEvent).changedTouches[0];
+      if (!t) return null;
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    }
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
   };
-  const onOverlayMove = (e: React.MouseEvent) => {
+
+  const onOverlayDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawMode) return;
+    const pt = getXY(e);
+    if (!pt) return;
+    setDrawing(true);
+    setStrokePoints([pt]);
+  };
+  const onOverlayMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!drawing || !drawMode) return;
-    const rect = canvasOverlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setStrokePoints(prev => [...prev, { x: e.clientX - rect.left, y: e.clientY - rect.top }]);
+    const pt = getXY(e);
+    if (pt) setStrokePoints(prev => [...prev, pt]);
   };
   const onOverlayUp = () => {
     if (!drawing || !drawMode) return;
@@ -314,8 +417,6 @@ export default function MapboxMap({
     setStrokePoints([]);
   };
 
-  const selNodeData = nodes.find(n => n.id === selNode);
-
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
@@ -324,10 +425,13 @@ export default function MapboxMap({
         <canvas
           ref={canvasOverlayRef}
           className="absolute inset-0 w-full h-full z-10"
-          style={{ cursor: "crosshair", pointerEvents: "auto" }}
+          style={{ cursor: "crosshair", pointerEvents: "auto", touchAction: "none" }}
           onMouseDown={onOverlayDown}
           onMouseMove={onOverlayMove}
           onMouseUp={onOverlayUp}
+          onTouchStart={onOverlayDown}
+          onTouchMove={onOverlayMove}
+          onTouchEnd={onOverlayUp}
         />
       )}
 
@@ -348,26 +452,6 @@ export default function MapboxMap({
           </button>
         ))}
       </div>
-
-      {/* Distance info overlay */}
-      {selNodeData && nodes.filter(n => n.id !== selNode).map(n => {
-        const mi = haversineMi(selNodeData, n).toFixed(1);
-        const km = haversineKm(selNodeData, n).toFixed(1);
-        const map = mapRef.current;
-        if (!map) return null;
-        const midLng = (selNodeData.lng + n.lng) / 2;
-        const midLat = (selNodeData.lat + n.lat) / 2;
-        const px = map.project([midLng, midLat]);
-        return (
-          <div
-            key={`dist-${n.id}`}
-            className="absolute z-10 bg-card/95 rounded px-2 py-0.5 text-[9px] font-medium text-secondary-foreground pointer-events-none card-shadow"
-            style={{ left: px.x - 30, top: px.y - 10 }}
-          >
-            {mi}mi / {km}km
-          </div>
-        );
-      })}
 
       {/* Status bar */}
       <div className="absolute bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between text-[10px] text-muted-foreground panel-shadow">
@@ -417,44 +501,24 @@ function updateMarkerElement(
   const PRIMARY = "#2d4a22";
   const DIM = "#8a8070";
 
-  // Badge — white text on solid circle
+  // Badge
   if (cnt > 0) {
     const badge = document.createElement("div");
-    badge.style.cssText = `
-      position:absolute;top:-6px;right:-6px;
-      background:${PRIMARY};color:white;
-      font-size:9px;font-weight:500;font-family:'DM Mono',monospace;
-      width:18px;height:18px;display:flex;align-items:center;justify-content:center;
-      border-radius:50%;z-index:2;border:2px solid white;
-      box-shadow:0 1px 3px rgba(0,0,0,0.2);
-    `;
+    badge.style.cssText = `position:absolute;top:-6px;right:-6px; background:${PRIMARY};color:white; font-size:9px;font-weight:500;font-family:'DM Mono',monospace; width:18px;height:18px;display:flex;align-items:center;justify-content:center; border-radius:50%;z-index:2;border:2px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.2);`;
     badge.textContent = String(cnt);
     el.appendChild(badge);
   }
 
-  // Main marker circle with category icon
+  // Main marker circle — larger touch target for iPad (44px min recommended)
   const dot = document.createElement("div");
   const iconSvg = CAT_ICONS[primaryCat] || DEFAULT_ICON;
-  dot.style.cssText = `
-    width:36px;height:36px;border-radius:50%;
-    background:${isSel ? 'hsl(40,22%,95%)' : 'hsl(40,20%,92%)'};
-    border:${isSel ? `3px solid ${PRIMARY}` : `2px solid ${DIM}`};
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:${isSel ? `0 0 0 4px rgba(45,74,34,0.2), 0 2px 8px rgba(0,0,0,0.15)` : '0 2px 6px rgba(0,0,0,0.12)'};
-    transition:all 0.2s ease;
-    color:${cnt > 0 ? PRIMARY : DIM};
-  `;
+  dot.style.cssText = `width:44px;height:44px;border-radius:50%; background:${isSel ? 'hsl(40,22%,95%)' : 'hsl(40,20%,92%)'}; border:${isSel ? `3px solid ${PRIMARY}` : `2px solid ${DIM}`}; display:flex;align-items:center;justify-content:center; box-shadow:${isSel ? `0 0 0 4px rgba(45,74,34,0.2), 0 2px 8px rgba(0,0,0,0.15)` : '0 2px 6px rgba(0,0,0,0.12)'}; transition:all 0.2s ease; color:${cnt > 0 ? PRIMARY : DIM};`;
   dot.innerHTML = cnt > 0 ? iconSvg : `<div style="width:6px;height:6px;border-radius:50%;background:${DIM}"></div>`;
   el.appendChild(dot);
 
   // Label
   const label = document.createElement("div");
-  label.style.cssText = `
-    margin-top:3px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace;
-    color:${isSel ? PRIMARY : 'hsl(40,8%,30%)'};
-    text-shadow:0 1px 3px rgba(255,255,255,0.9);
-    white-space:nowrap;letter-spacing:0.3px;
-  `;
+  label.style.cssText = `margin-top:3px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace; color:${isSel ? PRIMARY : 'hsl(40,8%,30%)'}; text-shadow:0 1px 3px rgba(255,255,255,0.9); white-space:nowrap;letter-spacing:0.3px;`;
   label.textContent = node.name;
   el.appendChild(label);
 
@@ -468,25 +532,10 @@ function updateMarkerElement(
 
   // Tooltip on hover
   const tooltip = document.createElement("div");
-  tooltip.style.cssText = `
-    position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
-    background:hsl(90,10%,14%);color:white;padding:6px 10px;border-radius:6px;
-    font-size:9px;font-family:'DM Mono',monospace;white-space:nowrap;
-    opacity:0;pointer-events:none;transition:opacity 0.15s ease;
-    box-shadow:0 4px 12px rgba(0,0,0,0.25);z-index:10;line-height:1.5;
-  `;
-  tooltip.innerHTML = `
-    <div style="font-weight:500;font-size:10px;margin-bottom:2px">${node.name}</div>
-    <div>${cnt} vehicle${cnt !== 1 ? 's' : ''} · ${nl?.fuel ? nl.fuel.toLocaleString() + 'g fuel' : 'No fuel req'}</div>
-    ${nodeMgrs ? `<div style="color:rgba(255,255,255,0.6)">MGRS ${nodeMgrs}</div>` : ''}
-  `;
-  // Arrow
+  tooltip.style.cssText = `position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%); background:hsl(90,10%,14%);color:white;padding:6px 10px;border-radius:6px; font-size:9px;font-family:'DM Mono',monospace;white-space:nowrap; opacity:0;pointer-events:none;transition:opacity 0.15s ease; box-shadow:0 4px 12px rgba(0,0,0,0.25);z-index:10;line-height:1.5;`;
+  tooltip.innerHTML = `<div style="font-weight:500;font-size:10px;margin-bottom:2px">${node.name}</div> <div>${cnt} vehicle${cnt !== 1 ? 's' : ''} · ${nl?.fuel ? nl.fuel.toLocaleString() + 'g fuel' : 'No fuel req'}</div> ${nodeMgrs ? `<div style="color:rgba(255,255,255,0.6)">MGRS ${nodeMgrs}</div>` : ''}`;
   const arrow = document.createElement("div");
-  arrow.style.cssText = `
-    position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);
-    width:8px;height:8px;background:hsl(90,10%,14%);
-    transform:translateX(-50%) rotate(45deg);
-  `;
+  arrow.style.cssText = `position:absolute;bottom:-4px;left:50%; width:8px;height:8px;background:hsl(90,10%,14%); transform:translateX(-50%) rotate(45deg);`;
   tooltip.appendChild(arrow);
   el.appendChild(tooltip);
 
