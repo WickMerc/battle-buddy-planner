@@ -16,20 +16,17 @@ export interface EquipmentEntry {
 }
 
 export interface ShapeData {
-  cx?: number;
-  cy?: number;
-  rx?: number;
-  ry?: number;
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
+  // For geographic shapes
+  center?: [number, number]; // [lng, lat]
+  radiusKm?: number;
+  bounds?: [[number, number], [number, number]]; // [[swLng, swLat], [neLng, neLat]]
+  type?: "circle" | "rect";
 }
 
 export interface MapNode {
   id: string;
-  x: number;
-  y: number;
+  lng: number;
+  lat: number;
   name: string;
   shape: "point" | "circle" | "rect";
   shapeData?: ShapeData;
@@ -89,38 +86,20 @@ export function gid(): string {
   return Math.random().toString(36).substr(2, 9);
 }
 
-export function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+/** Haversine distance in miles between two geographic points */
+export function haversineMi(a: { lng: number; lat: number }, b: { lng: number; lat: number }): number {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const aLat = a.lat * Math.PI / 180;
+  const bLat = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat) * Math.cos(bLat) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function px2mi(px: number): number {
-  return px * 0.12;
-}
-
-export function bounds(pts: { x: number; y: number }[]) {
-  let mx = Infinity, my = Infinity, Mx = -Infinity, My = -Infinity;
-  pts.forEach(p => { mx = Math.min(mx, p.x); my = Math.min(my, p.y); Mx = Math.max(Mx, p.x); My = Math.max(My, p.y); });
-  return { minX: mx, minY: my, maxX: Mx, maxY: My, cx: (mx + Mx) / 2, cy: (my + My) / 2, w: Mx - mx, h: My - my };
-}
-
-export function classifyShape(pts: { x: number; y: number }[]): "dot" | "line" | "circle" | "rect" {
-  if (pts.length < 8) return "dot";
-  const b = bounds(pts);
-  if (b.w < 15 && b.h < 15) return "dot";
-  const first = pts[0], last = pts[pts.length - 1];
-  const closed = dist(first, last) < Math.max(b.w, b.h) * 0.4;
-  if (!closed) return "line";
-  const perimeter = pts.reduce((s, p, i) => i === 0 ? 0 : s + dist(pts[i - 1], p), 0);
-  const rx = b.w / 2, ry = b.h / 2;
-  const ellipsePerim = Math.PI * (3 * (rx + ry) - Math.sqrt((3 * rx + ry) * (rx + 3 * ry)));
-  const rectPerim = 2 * (b.w + b.h);
-  const aspect = Math.min(b.w, b.h) / Math.max(b.w, b.h);
-  const circleScore = Math.abs(perimeter - ellipsePerim) / ellipsePerim;
-  const rectScore = Math.abs(perimeter - rectPerim) / rectPerim;
-  if (aspect > 0.7 && circleScore < 0.35) return "circle";
-  if (rectScore < 0.35) return "rect";
-  if (circleScore < rectScore) return "circle";
-  return "rect";
+/** Haversine distance in kilometers */
+export function haversineKm(a: { lng: number; lat: number }, b: { lng: number; lat: number }): number {
+  return haversineMi(a, b) * 1.60934;
 }
 
 export function computeLog(nodes: MapNode[], eqDb: EquipmentDB, hours: number): LogisticsResult {
@@ -157,7 +136,7 @@ export function computeLog(nodes: MapNode[], eqDb: EquipmentDB, hours: number): 
 export function buildCtx(nodes: MapNode[], eqDb: EquipmentDB, log: LogisticsResult, hours: number): string {
   let s = `BATTLEFIELD (${hours}hr):\n`;
   nodes.forEach(n => {
-    s += `\n${n.name} [${n.shape || "point"}]:\n`;
+    s += `\n${n.name} [${n.shape || "point"}] (${n.lat.toFixed(4)}, ${n.lng.toFixed(4)}):\n`;
     if (!n.equipment.length) { s += "  No equipment\n"; return; }
     n.equipment.forEach(e => {
       const t = eqDb[e.tid];
@@ -168,8 +147,11 @@ export function buildCtx(nodes: MapNode[], eqDb: EquipmentDB, log: LogisticsResu
   if (nodes.length > 1) {
     s += "\nDIST:\n";
     for (let i = 0; i < nodes.length; i++)
-      for (let j = i + 1; j < nodes.length; j++)
-        s += `${nodes[i].name}-${nodes[j].name}: ${px2mi(dist(nodes[i], nodes[j])).toFixed(1)}mi\n`;
+      for (let j = i + 1; j < nodes.length; j++) {
+        const mi = haversineMi(nodes[i], nodes[j]).toFixed(1);
+        const km = haversineKm(nodes[i], nodes[j]).toFixed(1);
+        s += `${nodes[i].name}-${nodes[j].name}: ${mi}mi / ${km}km\n`;
+      }
   }
   return s;
 }
